@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- use the "Show Preview" icon on the top right bar to launch the server ...  -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSeq - Generative Sequencer</title>
+    <style>
+        :root {
+            --bg-base: #121212; --bg-surface: #1e1e1e; --bg-elevated: #2c2c2c;
+            --accent: #00e676; --accent-hover: #00c853; --precount-color: #ffb300;
+            --text-primary: #e1e1e1; --text-secondary: #a0a0a0; --border: #333;
+            --font-main: system-ui, -apple-system, sans-serif; --font-mono: 'Courier New', Courier, monospace;
+        }
+        body { margin: 0; padding: 0; background-color: var(--bg-base); color: var(--text-primary); font-family: var(--font-main); display: flex; flex-direction: column; height: 100vh; }
+        nav { display: flex; background-color: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 0 1rem; }
+        .tab-btn { background: none; border: none; color: var(--text-secondary); padding: 1rem 1.5rem; font-size: 1rem; cursor: pointer; transition: all 0.2s; border-bottom: 2px solid transparent; }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+        main { flex: 1; padding: 2rem; overflow-y: auto; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-content.active { display: block; }
+        .control-panel { background-color: var(--bg-surface); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: 2.5rem; margin-bottom: 2rem; }
+        button.primary { background-color: var(--accent); color: #000; border: none; padding: 0.75rem 2rem; font-size: 1.1rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+        button.primary:hover { background-color: var(--accent-hover); }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
+        .bpm-row { display: flex; align-items: center; gap: 1rem; }
+        input[type="range"] { accent-color: var(--accent); width: 150px; }
+        input[type="number"] { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.5rem; border-radius: 4px; width: 60px; text-align: center; font-size: 1.1rem; }
+        input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; }
+        .time-display { background: var(--bg-elevated); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); min-width: 130px; text-align: center; }
+        #master-time { font-family: var(--font-mono); font-size: 2.2rem; font-weight: bold; color: var(--accent); letter-spacing: 2px; } 
+        #master-time.precount-active { color: var(--precount-color); }
+        #pulse-indicator { width: 240px; height: 60px; background-color: #333; border-radius: 6px; transition: background-color 0.05s ease-out, box-shadow 0.05s ease-out; box-shadow: 0 0 0 transparent; }
+        .logger-container { background-color: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; height: 200px; display: flex; flex-direction: column; }
+        .logger-header { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        #message-box { flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 0.9rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.25rem; }
+        .log-entry { margin: 0; }
+        .log-time { color: var(--accent); margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <button class="tab-btn active" data-target="tab-hud">Main Stage</button>
+        <button class="tab-btn" data-target="tab-rhythm">Rhythm Lab</button>
+        <button class="tab-btn" data-target="tab-bass">Bass Lab</button>
+        <button class="tab-btn" data-target="tab-chords">Harmony Lab</button>
+        <button class="tab-btn" data-target="tab-system">System / MIDI</button>
+    </nav>
+
+    <main>
+        <div id="tab-hud" class="tab-content active">
+            <h2>The HUD</h2>
+            
+            <div class="control-panel">
+                <button id="btn-play" class="primary">PLAY</button>
+                
+                <div class="control-group">
+                    <label>Master Pulse (BPM)</label>
+                    <div class="bpm-row">
+                        <input type="range" id="bpm-slider" min="40" max="280" value="120">
+                        <input type="number" id="bpm-input" min="40" max="280" value="120">
+                    </div>
+                </div>
+
+                <!-- NEW PRECOUNT SECTION -->
+                <div class="control-group">
+                    <label>Precount</label>
+                    <div class="bpm-row">
+                        <input type="number" id="precount-input" min="0" max="16" value="4" title="Number of precount pulses">
+                        <input type="checkbox" id="precount-tick" checked title="Audio tick during precount">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">AUDIO</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Playback Tick</label>
+                    <div class="bpm-row">
+                        <input type="checkbox" id="playback-tick" title="Audio tick during playback">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">AUDIO</span>
+                    </div>
+                </div>
+
+                <div class="time-display">
+                    <span id="master-time">00:00.0</span>
+                </div>
+
+                <div class="control-group">
+                    <label>Visual Pulse</label>
+                    <div class="bpm-row">
+                        <input type="checkbox" id="visual-metro-toggle" checked>
+                        <div id="pulse-indicator"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="logger-container">
+                <div class="logger-header">System Operations & State Logs</div>
+                <div id="message-box"></div>
+            </div>
+        </div>
+
+        <div id="tab-rhythm" class="tab-content"><h2>Rhythm Lab</h2></div>
+        <div id="tab-bass" class="tab-content"><h2>Bass Canvas</h2></div>
+        <div id="tab-chords" class="tab-content"><h2>Harmony Grid</h2></div>
+        <div id="tab-system" class="tab-content"><h2>System & MIDI Routing</h2><p>(Awaiting Routing Implementation)</p></div>
+    </main>
+
+    <script type="module">
+        import { TimingEngine } from './TimingEngine.js';
+
+        const messageBox = document.getElementById('message-box');
+        function logToUI(msg) {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 2 });
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+            messageBox.appendChild(entry);
+            messageBox.scrollTop = messageBox.scrollHeight;
+        }
+
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.getAttribute('data-target')).classList.add('active');
+            });
+        });
+
+        const engine = new TimingEngine();
+        
+        const btnPlay = document.getElementById('btn-play');
+        const bpmSlider = document.getElementById('bpm-slider');
+        const bpmInput = document.getElementById('bpm-input');
+        
+        const precountInput = document.getElementById('precount-input');
+        const precountTick = document.getElementById('precount-tick');
+        const playbackTick = document.getElementById('playback-tick');
+
+        function updateMetronomeSettings() {
+            engine.setPrecountSettings(
+                precountInput.value, 
+                precountTick.checked, 
+                playbackTick.checked
+            );
+        }
+
+        precountInput.addEventListener('change', updateMetronomeSettings);
+        precountTick.addEventListener('change', updateMetronomeSettings);
+        playbackTick.addEventListener('change', updateMetronomeSettings);
+
+        function togglePlayback() {
+            if (!engine.audioCtx) {
+                logToUI("Please click anywhere on the background first to initialize Audio!");
+                return;
+            }
+            if (!engine.isPlaying) {
+                updateMetronomeSettings(); // Ensure latest settings are caught
+                engine.start();
+                btnPlay.innerText = "STOP";
+                btnPlay.style.backgroundColor = "#ff5252"; 
+                logToUI(`Sequencer STARTED at ${engine.tempo} BPM`);
+            } else {
+                engine.stop();
+                btnPlay.innerText = "PLAY";
+                btnPlay.style.backgroundColor = "var(--accent)";
+                logToUI("Sequencer STOPPED");
+            }
+        }
+
+        btnPlay.addEventListener('click', togglePlayback);
+        bpmSlider.addEventListener('input', (e) => { engine.setTempo(e.target.value); bpmInput.value = e.target.value; });
+        bpmInput.addEventListener('change', (e) => { engine.setTempo(e.target.value); bpmSlider.value = e.target.value; });
+
+        const pulseIndicator = document.getElementById('pulse-indicator');
+        const visualMetroToggle = document.getElementById('visual-metro-toggle');
+        const masterTimeDisplay = document.getElementById('master-time');
+        let visualPulseEnabled = true;
+
+        visualMetroToggle.addEventListener('change', (e) => {
+            visualPulseEnabled = e.target.checked;
+            if (!visualPulseEnabled) {
+                pulseIndicator.style.backgroundColor = '#333';
+                pulseIndicator.style.boxShadow = 'none';
+            }
+        });
+
+        // --- Visual Callback Only ---
+        engine.onPulseCallback = (pulseNumber, scheduledTime) => {
+            if (visualPulseEnabled && engine.audioCtx) {
+                const timeUntilPulse = (scheduledTime - engine.audioCtx.currentTime) * 1000;
+                
+                // UX Touch: Amber for precount, Green for playback
+                const isPrecount = pulseNumber < 0;
+                const flashColor = isPrecount ? 'var(--precount-color)' : 'var(--accent)';
+
+                setTimeout(() => {
+                    pulseIndicator.style.backgroundColor = flashColor;
+                    pulseIndicator.style.boxShadow = `0 0 10px ${flashColor}`;
+                    setTimeout(() => {
+                        pulseIndicator.style.backgroundColor = '#333';
+                        pulseIndicator.style.boxShadow = 'none';
+                    }, 100); 
+                }, Math.max(0, timeUntilPulse));
+            }
+        };
+
+        function updateClockDisplay() {
+            if (engine.isPlaying) {
+                const elapsedSecs = engine.getElapsedTime();
+                const isNegative = elapsedSecs < 0;
+                const absSecs = Math.abs(elapsedSecs);
+                
+                const mins = Math.floor(absSecs / 60).toString().padStart(2, '0');
+                const secs = Math.floor(absSecs % 60).toString().padStart(2, '0');
+                const tenths = Math.floor((absSecs % 1) * 10);
+                
+                const sign = isNegative ? "-" : "";
+                masterTimeDisplay.innerText = `${sign}${mins}:${secs}.${tenths}`;
+                
+                if (isNegative) {
+                    masterTimeDisplay.classList.add('precount-active');
+                } else {
+                    masterTimeDisplay.classList.remove('precount-active');
+                }
+            } else {
+                masterTimeDisplay.innerText = "00:00.0";
+                masterTimeDisplay.classList.remove('precount-active');
+            }
+            requestAnimationFrame(updateClockDisplay);
+        }
+        requestAnimationFrame(updateClockDisplay); 
+
+        window.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+            if (e.code === 'Space') {
+                e.preventDefault(); 
+                togglePlayback();
+            }
+        });
+
+        let isInitialized = false;
+        document.body.addEventListener('click', () => {
+            if (isInitialized) return;
+            isInitialized = true;
+            engine.initAudioContext();
+            logToUI("Audio Engine Initialized.");
+        }, { once: true });
+
+        logToUI("WebSeq UI Ready. Click anywhere to initialize Audio.");
+
+    </script>
+</body>
+</html>
