@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- use the "Show Preview" icon on the top right bar to launch the server ...  -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSeq - Generative Sequencer</title>
@@ -38,6 +37,14 @@
         #message-box { flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 0.9rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.25rem; }
         .log-entry { margin: 0; }
         .log-time { color: var(--accent); margin-right: 0.5rem; }
+        
+        /* Added for System/MIDI Tab styling */
+        .sys-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .routing-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border); }
+        .routing-item:last-child { border-bottom: none; }
+        .route-mod { font-weight: bold; text-transform: uppercase; width: 100px; color: var(--accent); }
+        .route-badge.fallback { background-color: rgba(255,179,0,0.2); color: var(--precount-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+        .route-badge.bound { background-color: rgba(0,230,118,0.2); color: var(--accent); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -65,7 +72,6 @@
                     </div>
                 </div>
 
-                <!-- NEW PRECOUNT SECTION -->
                 <div class="control-group">
                     <label>Precount</label>
                     <div class="bpm-row">
@@ -105,11 +111,17 @@
         <div id="tab-rhythm" class="tab-content"><h2>Rhythm Lab</h2></div>
         <div id="tab-bass" class="tab-content"><h2>Bass Canvas</h2></div>
         <div id="tab-chords" class="tab-content"><h2>Harmony Grid</h2></div>
-        <div id="tab-system" class="tab-content"><h2>System & MIDI Routing</h2><p>(Awaiting Routing Implementation)</p></div>
+        <div id="tab-system" class="tab-content">
+            <h2>System & MIDI Routing</h2>
+            <div id="sys-content" class="sys-card">
+                <p>Waiting for System Initialization...</p>
+            </div>
+        </div>
     </main>
 
     <script type="module">
         import { TimingEngine } from './TimingEngine.js';
+        import { MidiBridge } from './MidiBridge.js';
 
         const messageBox = document.getElementById('message-box');
         function logToUI(msg) {
@@ -133,6 +145,8 @@
         });
 
         const engine = new TimingEngine();
+        // Initialize MidiBridge without audio context initially
+        const midiBridge = new MidiBridge(null);
         
         const btnPlay = document.getElementById('btn-play');
         const bpmSlider = document.getElementById('bpm-slider');
@@ -160,7 +174,7 @@
                 return;
             }
             if (!engine.isPlaying) {
-                updateMetronomeSettings(); // Ensure latest settings are caught
+                updateMetronomeSettings(); 
                 engine.start();
                 btnPlay.innerText = "STOP";
                 btnPlay.style.backgroundColor = "#ff5252"; 
@@ -190,12 +204,10 @@
             }
         });
 
-        // --- Visual Callback Only ---
         engine.onPulseCallback = (pulseNumber, scheduledTime) => {
             if (visualPulseEnabled && engine.audioCtx) {
                 const timeUntilPulse = (scheduledTime - engine.audioCtx.currentTime) * 1000;
                 
-                // UX Touch: Amber for precount, Green for playback
                 const isPrecount = pulseNumber < 0;
                 const flashColor = isPrecount ? 'var(--precount-color)' : 'var(--accent)';
 
@@ -244,15 +256,66 @@
             }
         });
 
+        // Diagnostics UI Builder
+        function renderSystemTab(diag) {
+            const container = document.getElementById('sys-content');
+            
+            let html = `<h3>Active Auto-Discovery Routing</h3>`;
+            ['rhythm', 'bass', 'chords'].forEach(mod => {
+                const d = diag[mod];
+                const badgeClass = d.isFallback ? 'fallback' : 'bound';
+                const badgeText = d.isFallback ? 'Fallback' : 'Hardware/Virtual';
+                
+                html += `
+                <div class="routing-item">
+                    <div>
+                        <span class="route-mod">${mod}</span>
+                        <span>${d.portName} <em>(Ch ${d.channel})</em></span>
+                    </div>
+                    <span class="route-badge ${badgeClass}">${badgeText}</span>
+                </div>`;
+            });
+
+            html += `<h3 style="margin-top: 1.5rem;">Detected MIDI Outputs</h3><ul>`;
+            diag.allPorts.forEach(port => {
+                html += `<li style="color: var(--text-secondary); margin-bottom: 0.3rem;">${port.name} <small>(${port.id})</small></li>`;
+            });
+            html += `</ul>`;
+            
+            container.innerHTML = html;
+        }
+
         let isInitialized = false;
-        document.body.addEventListener('click', () => {
+        document.body.addEventListener('click', async () => {
             if (isInitialized) return;
             isInitialized = true;
+            
+            // 1. Init Audio
             engine.initAudioContext();
             logToUI("Audio Engine Initialized.");
+            
+            // 2. Link AudioContext to MidiBridge and run Pre-Flight
+            midiBridge.audioCtx = engine.audioCtx;
+            logToUI("Starting Web MIDI Pre-Flight Auto-Discovery...");
+            
+            midiBridge.onPortsChanged = (diagnostics) => {
+                renderSystemTab(diagnostics);
+                logToUI(`[SYS] MIDI Routing Matrix Updated.`);
+                ['rhythm', 'bass', 'chords'].forEach(mod => {
+                    const d = diagnostics[mod];
+                    logToUI(`--> ${mod.toUpperCase()} bound to: ${d.portName} (Ch ${d.channel}) ${d.isFallback ? '[FALLBACK]' : ''}`);
+                });
+            };
+
+            const midiReady = await midiBridge.init();
+            if (!midiReady) {
+                logToUI("[SYS] WARNING: Web MIDI denied or unsupported. Defaulting to internal audio.");
+                document.getElementById('sys-content').innerHTML = "<p style='color:#ff5252'>Web MIDI API is not available in this browser.</p>";
+            }
+            
         }, { once: true });
 
-        logToUI("WebSeq UI Ready. Click anywhere to initialize Audio.");
+        logToUI("WebSeq UI Ready. Click anywhere to run System Initialization.");
 
     </script>
 </body>

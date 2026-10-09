@@ -18,6 +18,7 @@ export class MidiBridge {
             this.midiAccess = await navigator.requestMIDIAccess();
             this.updateOutputs();
             
+            // Listen for hot-plugging MIDI devices
             this.midiAccess.onstatechange = (e) => {
                 if (e.port.type === 'output') {
                     this.updateOutputs();
@@ -34,17 +35,64 @@ export class MidiBridge {
         this.outputs.clear();
         this.outputs.set('internal', { name: '🔊 Internal Web Audio Synth', id: 'internal' });
         
+        const portList = [];
         for (let output of this.midiAccess.outputs.values()) {
             this.outputs.set(output.id, { name: output.name, id: output.id, port: output });
+            portList.push(output);
         }
 
-        if (this.onPortsChanged) this.onPortsChanged(this.outputs);
+        this.autoRoute(portList);
+
+        if (this.onPortsChanged) {
+            const diagnostics = {
+                rhythm: this.getRouteInfo('rhythm'),
+                bass: this.getRouteInfo('bass'),
+                chords: this.getRouteInfo('chords'),
+                allPorts: Array.from(this.outputs.values())
+            };
+            this.onPortsChanged(diagnostics);
+        }
+    }
+
+    autoRoute(ports) {
+        // Helper to find the first port matching an array of Regex patterns
+        const findPort = (regexps) => {
+            for (let regex of regexps) {
+                for (let port of ports) {
+                    if (regex.test(port.name)) return port.id;
+                }
+            }
+            return 'internal';
+        };
+
+        const virtualRegex = /iac|fluidsynth|virtual|loopmidi/i;
+
+        // Rhythm: MPX8/MP8X -> Virtual -> Internal
+        this.routing.rhythm.portId = findPort([/mpx8/i, /mp8x/i, virtualRegex]);
+
+        // Bass: TB3/TB-3 -> Virtual -> Internal
+        this.routing.bass.portId = findPort([/tb-?3/i, virtualRegex]);
+
+        // Chords: Virtual -> Internal
+        this.routing.chords.portId = findPort([virtualRegex]);
+    }
+
+    getRouteInfo(moduleName) {
+        const route = this.routing[moduleName];
+        const portInfo = this.outputs.get(route.portId);
+        return {
+            module: moduleName,
+            portName: portInfo ? portInfo.name : 'Unknown Port',
+            channel: route.channel,
+            isFallback: route.portId === 'internal'
+        };
     }
 
     setRoute(moduleName, portId, channel) {
         if (this.routing[moduleName]) {
             this.routing[moduleName].portId = portId;
             this.routing[moduleName].channel = parseInt(channel);
+            this.updateOutputs(); // Re-trigger UI updates
         }
     }
 
@@ -84,16 +132,16 @@ export class MidiBridge {
         
         const maxGain = velocity / 127;
 
-        // A single, pure sine tone. No weird frequencies, no dual tones.
+        // A single, pure sine tone for fallback debugging.
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, time);
+        osc.frequency.setValueAtTime(440, time); 
         
-        // ZERO-CLICK ENVELOPE: Must start strictly at 0.
+        // ZERO-CLICK ENVELOPE
         gainNode.gain.setValueAtTime(0, time);
-        gainNode.gain.linearRampToValueAtTime(maxGain, time + 0.005); // 5ms attack to prevent popping
-        gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.1); // Smooth 100ms decay
+        gainNode.gain.linearRampToValueAtTime(maxGain, time + 0.005);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.1); 
 
         osc.start(time);
-        osc.stop(time + 0.15); // Stop slightly after envelope finishes
+        osc.stop(time + 0.15); 
     }
 }
