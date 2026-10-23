@@ -1,8 +1,28 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	],
-	"settings": {}
+    "folders": [
+        {
+            "name": "jsws (Git Repo)",
+            "path": "."
+        },
+        {
+            "name": "Share Root (Docs & Assets)",
+            "path": ".."
+        }
+    ],
+    "settings": {
+        "git.autoRepositoryDetection": "subFolders",
+        "files.eol": "\n",
+        "files.watcherExclude": {
+            "**/.git/objects/**": true,
+            "**/.git/subtree-cache/**": true,
+            "**/*.sf2": true,
+            "**/*.zip": true,
+            "**/miniserve*": true
+        },
+        "search.exclude": {
+            "**/*.sf2": true,
+            "**/*.zip": true,
+            "**/miniserve*": true
+        }
+    }
 }
