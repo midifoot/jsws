@@ -1,0 +1,27 @@
+{
+  "name": "AutoBand Web Sequencer",
+  "short_name": "AutoBand",
+  "description": "Offline Generative Trio Sequencer (Drums, Bass, Chords) with Web MIDI & SoundFont Engine",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#121212",
+  "theme_color": "#1e1e1e",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
+}

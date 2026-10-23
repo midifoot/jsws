@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSeq - Generative Sequencer</title>
+    <meta name="theme-color" content="#1e1e1e">
+    <title>AutoBand - Generative Trio Sequencer</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
     <style>
         :root {
             --bg-base: #121212; --bg-surface: #1e1e1e; --bg-elevated: #2c2c2c;
@@ -45,16 +48,20 @@
         .route-mod { font-weight: bold; text-transform: uppercase; width: 100px; color: var(--accent); }
         .route-badge.fallback { background-color: rgba(255,179,0,0.2); color: var(--precount-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
         .route-badge.bound { background-color: rgba(0,230,118,0.2); color: var(--accent); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+        .brand-title { font-size: 1.25rem; font-weight: bold; letter-spacing: 0.05em; color: var(--accent); margin-right: 1.5rem; display: flex; align-items: center; }
+        .status-badge { margin-left: auto; align-self: center; font-size: 0.85rem; background-color: #222; border: 1px solid #444; padding: 4px 10px; border-radius: 4px; color: var(--text-secondary); }
     </style>
 </head>
 <body>
 
     <nav>
+        <div class="brand-title">AutoBand</div>
         <button class="tab-btn active" data-target="tab-hud">Main Stage</button>
         <button class="tab-btn" data-target="tab-rhythm">Rhythm Lab</button>
         <button class="tab-btn" data-target="tab-bass">Bass Lab</button>
         <button class="tab-btn" data-target="tab-chords">Harmony Lab</button>
         <button class="tab-btn" data-target="tab-system">System / MIDI</button>
+        <div id="pwa-status" class="status-badge">PWA: Initializing...</div>
     </nav>
 
     <main>
@@ -315,7 +322,32 @@
             
         }, { once: true });
 
-        logToUI("WebSeq UI Ready. Click anywhere to run System Initialization.");
+        logToUI("AutoBand UI Ready. Click anywhere to run System Initialization.");
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('[AutoBand] SW registered:', registration.scope);
+                        const statusElem = document.getElementById('pwa-status');
+                        if (statusElem) {
+                            statusElem.textContent = 'PWA: Ready (Offline Active)';
+                            statusElem.style.color = 'var(--accent)';
+                            statusElem.style.borderColor = 'var(--accent)';
+                        }
+                        logToUI(`[PWA] Service Worker registered (Scope: ${registration.scope})`);
+                    })
+                    .catch((error) => {
+                        console.error('[AutoBand] SW registration failed:', error);
+                        const statusElem = document.getElementById('pwa-status');
+                        if (statusElem) {
+                            statusElem.textContent = 'PWA: Offline Failed';
+                            statusElem.style.color = '#ff5252';
+                        }
+                        logToUI(`[PWA] Service Worker registration failed: ${error.message}`);
+                    });
+            });
+        }
 
     </script>
 </body>
