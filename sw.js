@@ -1,4 +1,4 @@
-const CACHE_NAME = 'autoband-core-v2';
+const CACHE_NAME = 'autoband-core-v3';
 
 const CORE_ASSETS = [
   './',
@@ -7,7 +7,8 @@ const CORE_ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './TimingEngine.js',
-  './MidiBridge.js'
+  './MidiBridge.js',
+  './SoundFontManager.js'
 ];
 
 self.addEventListener('install', (event) => {

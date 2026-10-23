@@ -1,23 +1,28 @@
 export class MidiBridge {
-    constructor(audioCtx) {
-        this.audioCtx = audioCtx; 
+    constructor(audioCtx, soundFontManager = null) {
+        this.audioCtx = audioCtx;
+        this.soundFontManager = soundFontManager;
         this.midiAccess = null;
         this.outputs = new Map();
-        
+
         this.routing = {
             rhythm: { portId: 'internal', channel: 10 },
             bass:   { portId: 'internal', channel: 2 },
             chords: { portId: 'internal', channel: 3 }
         };
 
-        this.onPortsChanged = null; 
+        this.onPortsChanged = null;
+    }
+
+    setSoundFontManager(soundFontManager) {
+        this.soundFontManager = soundFontManager;
     }
 
     async init() {
         try {
             this.midiAccess = await navigator.requestMIDIAccess();
             this.updateOutputs();
-            
+
             // Listen for hot-plugging MIDI devices
             this.midiAccess.onstatechange = (e) => {
                 if (e.port.type === 'output') {
@@ -27,18 +32,21 @@ export class MidiBridge {
             return true;
         } catch (err) {
             console.warn("Web MIDI API access denied or unsupported.", err);
+            this.updateOutputs();
             return false;
         }
     }
 
     updateOutputs() {
         this.outputs.clear();
-        this.outputs.set('internal', { name: '🔊 Internal Web Audio Synth', id: 'internal' });
-        
+        this.outputs.set('internal', { name: '🔊 Internal Web Audio / SoundFont Synth', id: 'internal' });
+
         const portList = [];
-        for (let output of this.midiAccess.outputs.values()) {
-            this.outputs.set(output.id, { name: output.name, id: output.id, port: output });
-            portList.push(output);
+        if (this.midiAccess) {
+            for (let output of this.midiAccess.outputs.values()) {
+                this.outputs.set(output.id, { name: output.name, id: output.id, port: output });
+                portList.push(output);
+            }
         }
 
         this.autoRoute(portList);
@@ -91,7 +99,7 @@ export class MidiBridge {
     setRoute(moduleName, portId, channel) {
         if (this.routing[moduleName]) {
             this.routing[moduleName].portId = portId;
-            this.routing[moduleName].channel = parseInt(channel);
+            this.routing[moduleName].channel = parseInt(channel, 10);
             this.updateOutputs(); // Re-trigger UI updates
         }
     }
@@ -100,48 +108,74 @@ export class MidiBridge {
         const route = this.routing[moduleName];
         if (!route) return;
 
-        // Route 1: Local Browser Audio
+        const now = this.audioCtx ? this.audioCtx.currentTime : 0;
+        const targetTime = typeof timeInSeconds === 'number' ? timeInSeconds : now;
+        const msOffset = Math.max(0, (targetTime - now) * 1000);
+        const durationMs = Math.max(10, durationInSeconds * 1000);
+
+        // Route 1: Local Browser Audio (SoundFont Engine -> Oscillator Fallback)
         if (route.portId === 'internal') {
-            this.playInternalSynth(route.channel, pitch, velocity, timeInSeconds, durationInSeconds);
+            if (this.soundFontManager && this.soundFontManager.isLoaded) {
+                if (msOffset <= 4) {
+                    this.soundFontManager.noteOn(route.channel, pitch, velocity);
+                } else {
+                    setTimeout(() => {
+                        this.soundFontManager.noteOn(route.channel, pitch, velocity);
+                    }, msOffset);
+                }
+
+                setTimeout(() => {
+                    this.soundFontManager.noteOff(route.channel, pitch);
+                }, msOffset + durationMs);
+            } else {
+                this.playInternalSynth(route.channel, pitch, velocity, targetTime, durationInSeconds);
+            }
             return;
         }
 
         // Route 2: External MIDI
         const outputPortInfo = this.outputs.get(route.portId);
         if (outputPortInfo && outputPortInfo.port && this.audioCtx) {
-            const msOffset = (timeInSeconds - this.audioCtx.currentTime) * 1000;
-            const timeStamp = performance.now() + Math.max(0, msOffset);
+            const timeStamp = performance.now() + msOffset;
 
-            const statusByte = 0x90 + (route.channel - 1); 
+            const statusByte = 0x90 + (route.channel - 1);
             const noteOnMsg = new Uint8Array([statusByte, pitch, velocity]);
             const noteOffMsg = new Uint8Array([0x80 + (route.channel - 1), pitch, 0]);
 
             outputPortInfo.port.send(noteOnMsg, timeStamp);
-            outputPortInfo.port.send(noteOffMsg, timeStamp + (durationInSeconds * 1000));
+            outputPortInfo.port.send(noteOffMsg, timeStamp + durationMs);
         }
     }
 
-    playInternalSynth(channel, pitch, velocity, time, duration) {
+    playInternalSynth(channel, pitch, velocity, time, duration = 0.1) {
         if (!this.audioCtx) return;
-        
+
+        const startTime = Math.max(this.audioCtx.currentTime, time || this.audioCtx.currentTime);
         const osc = this.audioCtx.createOscillator();
         const gainNode = this.audioCtx.createGain();
-        
+
+        const destination = (this.soundFontManager && this.soundFontManager.limiterNode)
+            ? this.soundFontManager.limiterNode
+            : this.audioCtx.destination;
+
         osc.connect(gainNode);
-        gainNode.connect(this.audioCtx.destination);
-        
-        const maxGain = velocity / 127;
+        gainNode.connect(destination);
 
-        // A single, pure sine tone for fallback debugging.
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, time); 
-        
+        const maxGain = (velocity / 127) * 0.35;
+        const freq = channel === 10
+            ? 120 * Math.pow(2, (pitch - 36) / 24)
+            : 440 * Math.pow(2, (pitch - 69) / 12);
+
+        osc.type = channel === 2 ? 'sawtooth' : (channel === 3 ? 'triangle' : 'sine');
+        osc.frequency.setValueAtTime(freq, startTime);
+
         // ZERO-CLICK ENVELOPE
-        gainNode.gain.setValueAtTime(0, time);
-        gainNode.gain.linearRampToValueAtTime(maxGain, time + 0.005);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.1); 
+        const stopTime = startTime + Math.max(0.05, duration);
+        gainNode.gain.setValueAtTime(0.0001, startTime);
+        gainNode.gain.linearRampToValueAtTime(maxGain, startTime + 0.005);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, stopTime);
 
-        osc.start(time);
-        osc.stop(time + 0.15); 
+        osc.start(startTime);
+        osc.stop(stopTime + 0.02);
     }
 }

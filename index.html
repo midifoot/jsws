@@ -25,12 +25,18 @@
         .control-panel { background-color: var(--bg-surface); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: 2.5rem; margin-bottom: 2rem; }
         button.primary { background-color: var(--accent); color: #000; border: none; padding: 0.75rem 2rem; font-size: 1.1rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
         button.primary:hover { background-color: var(--accent-hover); }
+        button.secondary { background-color: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.55rem 1.1rem; font-size: 0.9rem; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+        button.secondary:hover { border-color: var(--accent); color: var(--accent); }
         .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
         .control-group label { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
         .bpm-row { display: flex; align-items: center; gap: 1rem; }
         input[type="range"] { accent-color: var(--accent); width: 150px; }
         input[type="number"] { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.5rem; border-radius: 4px; width: 60px; text-align: center; font-size: 1.1rem; }
         input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; }
+        select { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.55rem 0.75rem; border-radius: 4px; font-size: 0.95rem; cursor: pointer; min-width: 220px; }
+        select:focus { outline: none; border-color: var(--accent); }
+        input[type="file"] { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.45rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; }
+        input[type="file"]::file-selector-button { background-color: var(--accent); color: #000; border: none; padding: 0.4rem 0.9rem; margin-right: 0.75rem; border-radius: 4px; font-weight: bold; cursor: pointer; }
         .time-display { background: var(--bg-elevated); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); min-width: 130px; text-align: center; }
         #master-time { font-family: var(--font-mono); font-size: 2.2rem; font-weight: bold; color: var(--accent); letter-spacing: 2px; } 
         #master-time.precount-active { color: var(--precount-color); }
@@ -41,13 +47,21 @@
         .log-entry { margin: 0; }
         .log-time { color: var(--accent); margin-right: 0.5rem; }
         
-        /* Added for System/MIDI Tab styling */
+        /* Added for System/MIDI & SoundFont Tab styling */
         .sys-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .sys-card h3 { margin-top: 0; margin-bottom: 1rem; color: var(--text-primary); }
+        .sys-header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+        .sf-controls-row { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; }
+        .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+        .slider-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #262626; }
+        .slider-row:last-child { border-bottom: none; }
+        .slider-val { font-family: var(--font-mono); font-size: 0.9rem; color: var(--accent); min-width: 55px; text-align: right; }
         .routing-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border); }
         .routing-item:last-child { border-bottom: none; }
-        .route-mod { font-weight: bold; text-transform: uppercase; width: 100px; color: var(--accent); }
-        .route-badge.fallback { background-color: rgba(255,179,0,0.2); color: var(--precount-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
-        .route-badge.bound { background-color: rgba(0,230,118,0.2); color: var(--accent); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+        .route-mod { font-weight: bold; text-transform: uppercase; width: 100px; color: var(--accent); display: inline-block; }
+        .route-badge { padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+        .route-badge.fallback { background-color: rgba(255,179,0,0.2); color: var(--precount-color); }
+        .route-badge.bound { background-color: rgba(0,230,118,0.2); color: var(--accent); }
         .brand-title { font-size: 1.25rem; font-weight: bold; letter-spacing: 0.05em; color: var(--accent); margin-right: 1.5rem; display: flex; align-items: center; }
         .status-badge { margin-left: auto; align-self: center; font-size: 0.85rem; background-color: #222; border: 1px solid #444; padding: 4px 10px; border-radius: 4px; color: var(--text-secondary); }
     </style>
@@ -118,8 +132,109 @@
         <div id="tab-rhythm" class="tab-content"><h2>Rhythm Lab</h2></div>
         <div id="tab-bass" class="tab-content"><h2>Bass Canvas</h2></div>
         <div id="tab-chords" class="tab-content"><h2>Harmony Grid</h2></div>
+
         <div id="tab-system" class="tab-content">
-            <h2>System & MIDI Routing</h2>
+            <h2>System, SoundFont & MIDI Routing</h2>
+
+            <!-- 1. SoundFont Engine Card -->
+            <div class="sys-card">
+                <div class="sys-header-row">
+                    <h3 style="margin: 0;">Internal SoundFont Synthesizer (General MIDI .sf2)</h3>
+                    <span id="sf-status-badge" class="route-badge fallback">SoundFont: Checking...</span>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0;">
+                    Load <code>FluidR3_GM.sf2</code> once to cache it offline in IndexedDB for instant 0-network boot on subsequent launches.
+                </p>
+                <div class="sf-controls-row">
+                    <input type="file" id="sf-file-input" accept=".sf2">
+                    <button id="btn-clear-sf" class="secondary">Clear Cached SoundFont</button>
+                    <button id="btn-test-drums" class="secondary">Test Drums</button>
+                    <button id="btn-test-bass" class="secondary">Test Bass</button>
+                    <button id="btn-test-chords" class="secondary">Test Chords</button>
+                </div>
+            </div>
+
+            <!-- 2. On-The-Fly Sound Pickers -->
+            <div class="sys-card">
+                <h3>On-The-Fly GM Preset Selection</h3>
+                <div class="sys-grid">
+                    <div class="control-group">
+                        <label for="preset-rhythm">Drums (Channel 10 - Bank 128)</label>
+                        <select id="preset-rhythm">
+                            <option value="0" selected>Standard Kit (Preset 0)</option>
+                            <option value="8">Room Kit (Preset 8)</option>
+                            <option value="16">Power Kit (Preset 16)</option>
+                            <option value="24">Electronic / 808 Kit (Preset 24)</option>
+                            <option value="32">Jazz Kit (Preset 32)</option>
+                            <option value="40">Brush Kit (Preset 40)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="preset-bass">Bass (Channel 2 - Bank 0)</label>
+                        <select id="preset-bass">
+                            <option value="33" selected>Fingered Bass (Preset 33)</option>
+                            <option value="34">Picked Bass (Preset 34)</option>
+                            <option value="35">Fretless Bass (Preset 35)</option>
+                            <option value="36">Slap Bass 1 (Preset 36)</option>
+                            <option value="37">Slap Bass 2 (Preset 37)</option>
+                            <option value="38">Synth Bass 1 (Preset 38)</option>
+                            <option value="39">Synth Bass 2 (Preset 39)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="preset-chords">Chords (Channel 3 - Bank 0)</label>
+                        <select id="preset-chords">
+                            <option value="0" selected>Acoustic Grand Piano (Preset 0)</option>
+                            <option value="1">Bright Acoustic Piano (Preset 1)</option>
+                            <option value="4">Electric Piano 1 / Rhodes (Preset 4)</option>
+                            <option value="5">Electric Piano 2 / DX (Preset 5)</option>
+                            <option value="7">Clavinet (Preset 7)</option>
+                            <option value="11">Vibraphone (Preset 11)</option>
+                            <option value="89">Warm Synth Pad (Preset 89)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Master Submix & Limiter Sliders -->
+            <div class="sys-card">
+                <h3>Master Submix Bus & Brickwall Limiter</h3>
+                <div class="sys-grid">
+                    <div>
+                        <div class="slider-row">
+                            <label for="slider-master-vol">Master Volume</label>
+                            <input type="range" id="slider-master-vol" min="0" max="1" step="0.01" value="0.85">
+                            <span id="val-master-vol" class="slider-val">0.85</span>
+                        </div>
+                        <div class="slider-row">
+                            <label for="slider-limiter-thresh">Limiter Threshold</label>
+                            <input type="range" id="slider-limiter-thresh" min="-18" max="0" step="0.5" value="-3">
+                            <span id="val-limiter-thresh" class="slider-val">-3.0 dB</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="slider-row">
+                            <label for="slider-mix-rhythm">Drums Mix (Ch 10)</label>
+                            <input type="range" id="slider-mix-rhythm" min="0" max="1" step="0.01" value="1.00">
+                            <span id="val-mix-rhythm" class="slider-val">1.00</span>
+                        </div>
+                        <div class="slider-row">
+                            <label for="slider-mix-bass">Bass Mix (Ch 2)</label>
+                            <input type="range" id="slider-mix-bass" min="0" max="1" step="0.01" value="1.00">
+                            <span id="val-mix-bass" class="slider-val">1.00</span>
+                        </div>
+                        <div class="slider-row">
+                            <label for="slider-mix-chords">Chords Mix (Ch 3)</label>
+                            <input type="range" id="slider-mix-chords" min="0" max="1" step="0.01" value="1.00">
+                            <span id="val-mix-chords" class="slider-val">1.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Active MIDI Routing Diagnostics Card -->
             <div id="sys-content" class="sys-card">
                 <p>Waiting for System Initialization...</p>
             </div>
@@ -129,6 +244,7 @@
     <script type="module">
         import { TimingEngine } from './TimingEngine.js';
         import { MidiBridge } from './MidiBridge.js';
+        import { SoundFontManager } from './SoundFontManager.js';
 
         const messageBox = document.getElementById('message-box');
         function logToUI(msg) {
@@ -152,9 +268,19 @@
         });
 
         const engine = new TimingEngine();
-        // Initialize MidiBridge without audio context initially
-        const midiBridge = new MidiBridge(null);
-        
+        const soundFontManager = new SoundFontManager(null);
+        const midiBridge = new MidiBridge(null, soundFontManager);
+
+        // Status badge & logging callback for SoundFontManager
+        const sfStatusBadge = document.getElementById('sf-status-badge');
+        soundFontManager.onStatusChange = (statusText, isReady) => {
+            if (sfStatusBadge) {
+                sfStatusBadge.textContent = `SoundFont: ${statusText}`;
+                sfStatusBadge.className = `route-badge ${isReady ? 'bound' : 'fallback'}`;
+            }
+            logToUI(`[SF2] ${statusText}`);
+        };
+
         const btnPlay = document.getElementById('btn-play');
         const bpmSlider = document.getElementById('bpm-slider');
         const bpmInput = document.getElementById('bpm-input');
@@ -175,11 +301,8 @@
         precountTick.addEventListener('change', updateMetronomeSettings);
         playbackTick.addEventListener('change', updateMetronomeSettings);
 
-        function togglePlayback() {
-            if (!engine.audioCtx) {
-                logToUI("Please click anywhere on the background first to initialize Audio!");
-                return;
-            }
+        async function togglePlayback() {
+            await ensureSystemInitialized();
             if (!engine.isPlaying) {
                 updateMetronomeSettings(); 
                 engine.start();
@@ -271,7 +394,7 @@
             ['rhythm', 'bass', 'chords'].forEach(mod => {
                 const d = diag[mod];
                 const badgeClass = d.isFallback ? 'fallback' : 'bound';
-                const badgeText = d.isFallback ? 'Fallback' : 'Hardware/Virtual';
+                const badgeText = d.isFallback ? 'Fallback (Internal)' : 'Hardware/Virtual';
                 
                 html += `
                 <div class="routing-item">
@@ -292,35 +415,144 @@
             container.innerHTML = html;
         }
 
+        // System Initialization Lifecycle
         let isInitialized = false;
-        document.body.addEventListener('click', async () => {
-            if (isInitialized) return;
-            isInitialized = true;
-            
-            // 1. Init Audio
-            engine.initAudioContext();
-            logToUI("Audio Engine Initialized.");
-            
-            // 2. Link AudioContext to MidiBridge and run Pre-Flight
-            midiBridge.audioCtx = engine.audioCtx;
-            logToUI("Starting Web MIDI Pre-Flight Auto-Discovery...");
-            
-            midiBridge.onPortsChanged = (diagnostics) => {
-                renderSystemTab(diagnostics);
-                logToUI(`[SYS] MIDI Routing Matrix Updated.`);
-                ['rhythm', 'bass', 'chords'].forEach(mod => {
-                    const d = diagnostics[mod];
-                    logToUI(`--> ${mod.toUpperCase()} bound to: ${d.portName} (Ch ${d.channel}) ${d.isFallback ? '[FALLBACK]' : ''}`);
-                });
-            };
+        let initPromise = null;
 
-            const midiReady = await midiBridge.init();
-            if (!midiReady) {
-                logToUI("[SYS] WARNING: Web MIDI denied or unsupported. Defaulting to internal audio.");
-                document.getElementById('sys-content').innerHTML = "<p style='color:#ff5252'>Web MIDI API is not available in this browser.</p>";
-            }
-            
+        async function ensureSystemInitialized() {
+            if (isInitialized) return;
+            if (initPromise) return initPromise;
+
+            initPromise = (async () => {
+                isInitialized = true;
+
+                // 1. Init AudioContext
+                engine.initAudioContext();
+                logToUI("Audio Engine Initialized.");
+
+                // 2. Link AudioContext to SoundFontManager & MidiBridge
+                soundFontManager.audioCtx = engine.audioCtx;
+                midiBridge.audioCtx = engine.audioCtx;
+                midiBridge.setSoundFontManager(soundFontManager);
+
+                // 3. Boot SoundFontManager from IndexedDB Cache
+                await soundFontManager.init();
+
+                // 4. Run Web MIDI Pre-Flight Auto-Discovery
+                logToUI("Starting Web MIDI Pre-Flight Auto-Discovery...");
+                midiBridge.onPortsChanged = (diagnostics) => {
+                    renderSystemTab(diagnostics);
+                    logToUI(`[SYS] MIDI Routing Matrix Updated.`);
+                    ['rhythm', 'bass', 'chords'].forEach(mod => {
+                        const d = diagnostics[mod];
+                        logToUI(`--> ${mod.toUpperCase()} bound to: ${d.portName} (Ch ${d.channel}) ${d.isFallback ? '[FALLBACK]' : ''}`);
+                    });
+                };
+
+                const midiReady = await midiBridge.init();
+                if (!midiReady) {
+                    logToUI("[SYS] WARNING: Web MIDI denied or unsupported. Defaulting to internal SoundFont / Web Audio.");
+                }
+            })();
+
+            return initPromise;
+        }
+
+        document.body.addEventListener('click', () => {
+            ensureSystemInitialized();
         }, { once: true });
+
+        // Wire SoundFont File Picker & Cache Clear Button
+        const sfFileInput = document.getElementById('sf-file-input');
+        const btnClearSf = document.getElementById('btn-clear-sf');
+
+        sfFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            await ensureSystemInitialized();
+            try {
+                await soundFontManager.loadFromFile(file);
+            } catch (err) {
+                logToUI(`[SF2] ERROR loading ${file.name}: ${err.message}`);
+            }
+        });
+
+        btnClearSf.addEventListener('click', async () => {
+            await ensureSystemInitialized();
+            await soundFontManager.clearCache();
+            sfFileInput.value = '';
+        });
+
+        // Wire Audition / Test Buttons
+        document.getElementById('btn-test-drums').addEventListener('click', async () => {
+            await ensureSystemInitialized();
+            const now = engine.audioCtx.currentTime;
+            midiBridge.sendNoteOn('rhythm', 36, 115, now, 0.2);        // Kick
+            midiBridge.sendNoteOn('rhythm', 42, 95,  now + 0.15, 0.15); // Closed Hat
+            midiBridge.sendNoteOn('rhythm', 38, 110, now + 0.30, 0.2);  // Snare
+        });
+
+        document.getElementById('btn-test-bass').addEventListener('click', async () => {
+            await ensureSystemInitialized();
+            const now = engine.audioCtx.currentTime;
+            midiBridge.sendNoteOn('bass', 36, 110, now, 0.35);          // C2
+            midiBridge.sendNoteOn('bass', 43, 100, now + 0.25, 0.35);   // G2
+        });
+
+        document.getElementById('btn-test-chords').addEventListener('click', async () => {
+            await ensureSystemInitialized();
+            const now = engine.audioCtx.currentTime;
+            [60, 64, 67, 71].forEach(note => {
+                midiBridge.sendNoteOn('chords', note, 95, now, 0.6);    // Cmaj7
+            });
+        });
+
+        // Wire On-The-Fly Preset Pickers
+        const presetRhythm = document.getElementById('preset-rhythm');
+        const presetBass = document.getElementById('preset-bass');
+        const presetChords = document.getElementById('preset-chords');
+
+        presetRhythm.addEventListener('change', (e) => {
+            const opt = e.target.options[e.target.selectedIndex];
+            soundFontManager.setPreset(10, 128, parseInt(e.target.value, 10), opt.text);
+            logToUI(`[SF2] Drums preset -> ${opt.text}`);
+        });
+
+        presetBass.addEventListener('change', (e) => {
+            const opt = e.target.options[e.target.selectedIndex];
+            soundFontManager.setPreset(2, 0, parseInt(e.target.value, 10), opt.text);
+            logToUI(`[SF2] Bass preset -> ${opt.text}`);
+        });
+
+        presetChords.addEventListener('change', (e) => {
+            const opt = e.target.options[e.target.selectedIndex];
+            soundFontManager.setPreset(3, 0, parseInt(e.target.value, 10), opt.text);
+            logToUI(`[SF2] Chords preset -> ${opt.text}`);
+        });
+
+        // Wire Master Submix & Limiter Sliders
+        const sliderMasterVol = document.getElementById('slider-master-vol');
+        const valMasterVol = document.getElementById('val-master-vol');
+        sliderMasterVol.addEventListener('input', (e) => {
+            valMasterVol.textContent = parseFloat(e.target.value).toFixed(2);
+            soundFontManager.setMasterVolume(e.target.value);
+        });
+
+        const sliderLimiterThresh = document.getElementById('slider-limiter-thresh');
+        const valLimiterThresh = document.getElementById('val-limiter-thresh');
+        sliderLimiterThresh.addEventListener('input', (e) => {
+            valLimiterThresh.textContent = `${parseFloat(e.target.value).toFixed(1)} dB`;
+            soundFontManager.setLimiterThreshold(e.target.value);
+        });
+
+        ['rhythm', 'bass', 'chords'].forEach((mod) => {
+            const slider = document.getElementById(`slider-mix-${mod}`);
+            const label = document.getElementById(`val-mix-${mod}`);
+            slider.addEventListener('input', (e) => {
+                label.textContent = parseFloat(e.target.value).toFixed(2);
+                soundFontManager.setModuleVolume(mod, e.target.value);
+            });
+        });
 
         logToUI("AutoBand UI Ready. Click anywhere to run System Initialization.");
 
