@@ -1,586 +1,796 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1e1e1e">
-    <title>AutoBand - Generative Trio Sequencer</title>
-    <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="./icons/icon-192.png">
-    <style>
-        :root {
-            --bg-base: #121212; --bg-surface: #1e1e1e; --bg-elevated: #2c2c2c;
-            --accent: #00e676; --accent-hover: #00c853; --precount-color: #ffb300;
-            --text-primary: #e1e1e1; --text-secondary: #a0a0a0; --border: #333;
-            --font-main: system-ui, -apple-system, sans-serif; --font-mono: 'Courier New', Courier, monospace;
-        }
-        body { margin: 0; padding: 0; background-color: var(--bg-base); color: var(--text-primary); font-family: var(--font-main); display: flex; flex-direction: column; height: 100vh; }
-        nav { display: flex; background-color: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 0 1rem; }
-        .tab-btn { background: none; border: none; color: var(--text-secondary); padding: 1rem 1.5rem; font-size: 1rem; cursor: pointer; transition: all 0.2s; border-bottom: 2px solid transparent; }
-        .tab-btn:hover { color: var(--text-primary); }
-        .tab-btn.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
-        main { flex: 1; padding: 2rem; overflow-y: auto; }
-        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
-        .tab-content.active { display: block; }
-        .control-panel { background-color: var(--bg-surface); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; flex-wrap: wrap; gap: 2.5rem; margin-bottom: 2rem; }
-        button.primary { background-color: var(--accent); color: #000; border: none; padding: 0.75rem 2rem; font-size: 1.1rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
-        button.primary:hover { background-color: var(--accent-hover); }
-        button.secondary { background-color: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.55rem 1.1rem; font-size: 0.9rem; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
-        button.secondary:hover { border-color: var(--accent); color: var(--accent); }
-        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
-        .control-group label { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
-        .bpm-row { display: flex; align-items: center; gap: 1rem; }
-        input[type="range"] { accent-color: var(--accent); width: 150px; }
-        input[type="number"] { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.5rem; border-radius: 4px; width: 60px; text-align: center; font-size: 1.1rem; }
-        input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); cursor: pointer; }
-        select { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.55rem 0.75rem; border-radius: 4px; font-size: 0.95rem; cursor: pointer; min-width: 220px; }
-        select:focus { outline: none; border-color: var(--accent); }
-        input[type="file"] { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); padding: 0.45rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; }
-        input[type="file"]::file-selector-button { background-color: var(--accent); color: #000; border: none; padding: 0.4rem 0.9rem; margin-right: 0.75rem; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .time-display { background: var(--bg-elevated); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); min-width: 130px; text-align: center; }
-        #master-time { font-family: var(--font-mono); font-size: 2.2rem; font-weight: bold; color: var(--accent); letter-spacing: 2px; } 
-        #master-time.precount-active { color: var(--precount-color); }
-        #pulse-indicator { width: 240px; height: 60px; background-color: #333; border-radius: 6px; transition: background-color 0.05s ease-out, box-shadow 0.05s ease-out; box-shadow: 0 0 0 transparent; }
-        .logger-container { background-color: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; height: 200px; display: flex; flex-direction: column; }
-        .logger-header { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-        #message-box { flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 0.9rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.25rem; }
-        .log-entry { margin: 0; }
-        .log-time { color: var(--accent); margin-right: 0.5rem; }
-        
-        /* Added for System/MIDI & SoundFont Tab styling */
-        .sys-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
-        .sys-card h3 { margin-top: 0; margin-bottom: 1rem; color: var(--text-primary); }
-        .sys-header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
-        .sf-controls-row { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; }
-        .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
-        .slider-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #262626; }
-        .slider-row:last-child { border-bottom: none; }
-        .slider-val { font-family: var(--font-mono); font-size: 0.9rem; color: var(--accent); min-width: 55px; text-align: right; }
-        .routing-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border); }
-        .routing-item:last-child { border-bottom: none; }
-        .route-mod { font-weight: bold; text-transform: uppercase; width: 100px; color: var(--accent); display: inline-block; }
-        .route-badge { padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
-        .route-badge.fallback { background-color: rgba(255,179,0,0.2); color: var(--precount-color); }
-        .route-badge.bound { background-color: rgba(0,230,118,0.2); color: var(--accent); }
-        .brand-title { font-size: 1.25rem; font-weight: bold; letter-spacing: 0.05em; color: var(--accent); margin-right: 1.5rem; display: flex; align-items: center; }
-        .status-badge { margin-left: auto; align-self: center; font-size: 0.85rem; background-color: #222; border: 1px solid #444; padding: 4px 10px; border-radius: 4px; color: var(--text-secondary); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a1a1a">
+  <title>AutoBand - Generative Trio Sequencer</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles/ui-main.css">
 </head>
 <body>
 
-    <nav>
-        <div class="brand-title">AutoBand</div>
-        <button class="tab-btn active" data-target="tab-hud">Main Stage</button>
-        <button class="tab-btn" data-target="tab-rhythm">Rhythm Lab</button>
-        <button class="tab-btn" data-target="tab-bass">Bass Lab</button>
-        <button class="tab-btn" data-target="tab-chords">Harmony Lab</button>
-        <button class="tab-btn" data-target="tab-system">System / MIDI</button>
-        <div id="pwa-status" class="status-badge">PWA: Initializing...</div>
+  <!-- ========================================================================
+       1. TOP GLOBAL NAVIGATION HEADER (PINNED)
+       ======================================================================== -->
+  <header class="global-header">
+    <div class="brand-cluster">
+      <div class="brand-logo">AUTOBAND</div>
+    </div>
+
+    <nav class="primary-nav">
+      <button class="nav-tab-btn active" data-target="view-main-stage">MAIN STAGE</button>
+      <button class="nav-tab-btn" data-target="view-patterns">PATTERNS</button>
+      <button class="nav-tab-btn" data-target="view-settings">SYSTEM SETTINGS</button>
     </nav>
 
-    <main>
-        <div id="tab-hud" class="tab-content active">
-            <h2>The HUD</h2>
-            
-            <div class="control-panel">
-                <button id="btn-play" class="primary">PLAY</button>
-                
-                <div class="control-group">
-                    <label>Master Pulse (BPM)</label>
-                    <div class="bpm-row">
-                        <input type="range" id="bpm-slider" min="40" max="280" value="120">
-                        <input type="number" id="bpm-input" min="40" max="280" value="120">
-                    </div>
-                </div>
+    <div class="header-status-cluster">
+      <div class="stage-clock-pill" title="Master Tempo & Runtime Clock">
+        <span id="clock-pill-bpm" class="clock-pill-bpm">120.0 BPM</span>
+        <span class="clock-pill-sep">•</span>
+        <span id="clock-pill-time" class="clock-pill-time">00:00.0</span>
+      </div>
+      <div id="pwa-status" class="status-badge">PWA: Initializing...</div>
+    </div>
+  </header>
 
-                <div class="control-group">
-                    <label>Precount</label>
-                    <div class="bpm-row">
-                        <input type="number" id="precount-input" min="0" max="16" value="4" title="Number of precount pulses">
-                        <input type="checkbox" id="precount-tick" checked title="Audio tick during precount">
-                        <span style="font-size: 0.8rem; color: var(--text-secondary);">AUDIO</span>
-                    </div>
-                </div>
+  <!-- ========================================================================
+       2. MAIN VIEWPORT AREA
+       ======================================================================== -->
+  <main id="app-viewport">
 
-                <div class="control-group">
-                    <label>Playback Tick</label>
-                    <div class="bpm-row">
-                        <input type="checkbox" id="playback-tick" title="Audio tick during playback">
-                        <span style="font-size: 0.8rem; color: var(--text-secondary);">AUDIO</span>
-                    </div>
-                </div>
+    <!-- ======================================================================
+         VIEW 1: MAIN STAGE (#view-main-stage)
+         ====================================================================== -->
+    <section id="view-main-stage" class="view-container active">
 
-                <div class="time-display">
-                    <span id="master-time">00:00.0</span>
-                </div>
+      <!-- BLOCK A: Main Sequencer & Transport Header -->
+      <div class="hw-card transport-header-grid">
+        <div class="transport-left">
+          <button id="btn-play" class="btn-transport-play" title="Toggle Sequencer (Spacebar)">▶ PLAY</button>
 
-                <div class="control-group">
-                    <label>Visual Pulse</label>
-                    <div class="bpm-row">
-                        <input type="checkbox" id="visual-metro-toggle" checked>
-                        <div id="pulse-indicator"></div>
-                    </div>
-                </div>
+          <div class="tempo-control-cluster">
+            <span class="card-section-label">Master Tempo (BPM)</span>
+            <div class="tempo-row">
+              <input type="range" id="bpm-slider" min="40" max="280" step="0.5" value="120">
+              <input type="number" id="bpm-input" min="40" max="280" step="0.5" value="120.0">
             </div>
+          </div>
 
-            <div class="logger-container">
-                <div class="logger-header">System Operations & State Logs</div>
-                <div id="message-box"></div>
-            </div>
+          <div class="beat-pulse-cluster">
+            <span class="card-section-label">Beat Pulse</span>
+            <div id="pulse-indicator" class="beat-pulse-led">IDLE</div>
+          </div>
         </div>
 
-        <div id="tab-rhythm" class="tab-content"><h2>Rhythm Lab</h2></div>
-        <div id="tab-bass" class="tab-content"><h2>Bass Canvas</h2></div>
-        <div id="tab-chords" class="tab-content"><h2>Harmony Grid</h2></div>
-
-        <div id="tab-system" class="tab-content">
-            <h2>System, SoundFont & MIDI Routing</h2>
-
-            <!-- 1. SoundFont Engine Card -->
-            <div class="sys-card">
-                <div class="sys-header-row">
-                    <h3 style="margin: 0;">Internal SoundFont Synthesizer (General MIDI .sf2)</h3>
-                    <span id="sf-status-badge" class="route-badge fallback">SoundFont: Checking...</span>
-                </div>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0;">
-                    Load <code>FluidR3_GM.sf2</code> once to cache it offline in IndexedDB for instant 0-network boot on subsequent launches.
-                </p>
-                <div class="sf-controls-row">
-                    <input type="file" id="sf-file-input" accept=".sf2">
-                    <button id="btn-clear-sf" class="secondary">Clear Cached SoundFont</button>
-                    <button id="btn-test-drums" class="secondary">Test Drums</button>
-                    <button id="btn-test-bass" class="secondary">Test Bass</button>
-                    <button id="btn-test-chords" class="secondary">Test Chords</button>
-                </div>
+        <!-- Precount & Click Options -->
+        <div class="precount-click-cluster">
+          <div>
+            <span class="card-section-label">Precount Beats</span>
+            <div class="stepper">
+              <button id="precount-dec" class="stepper-btn">−</button>
+              <span id="precount-val" class="stepper-val">4</span>
+              <button id="precount-inc" class="stepper-btn">+</button>
             </div>
+          </div>
 
-            <!-- 2. On-The-Fly Sound Pickers -->
-            <div class="sys-card">
-                <h3>On-The-Fly GM Preset Selection</h3>
-                <div class="sys-grid">
-                    <div class="control-group">
-                        <label for="preset-rhythm">Drums (Channel 10 - Bank 128)</label>
-                        <select id="preset-rhythm">
-                            <option value="0" selected>Standard Kit (Preset 0)</option>
-                            <option value="8">Room Kit (Preset 8)</option>
-                            <option value="16">Power Kit (Preset 16)</option>
-                            <option value="24">Electronic / 808 Kit (Preset 24)</option>
-                            <option value="32">Jazz Kit (Preset 32)</option>
-                            <option value="40">Brush Kit (Preset 40)</option>
-                        </select>
-                    </div>
-
-                    <div class="control-group">
-                        <label for="preset-bass">Bass (Channel 2 - Bank 0)</label>
-                        <select id="preset-bass">
-                            <option value="33" selected>Fingered Bass (Preset 33)</option>
-                            <option value="34">Picked Bass (Preset 34)</option>
-                            <option value="35">Fretless Bass (Preset 35)</option>
-                            <option value="36">Slap Bass 1 (Preset 36)</option>
-                            <option value="37">Slap Bass 2 (Preset 37)</option>
-                            <option value="38">Synth Bass 1 (Preset 38)</option>
-                            <option value="39">Synth Bass 2 (Preset 39)</option>
-                        </select>
-                    </div>
-
-                    <div class="control-group">
-                        <label for="preset-chords">Chords (Channel 3 - Bank 0)</label>
-                        <select id="preset-chords">
-                            <option value="0" selected>Acoustic Grand Piano (Preset 0)</option>
-                            <option value="1">Bright Acoustic Piano (Preset 1)</option>
-                            <option value="4">Electric Piano 1 / Rhodes (Preset 4)</option>
-                            <option value="5">Electric Piano 2 / DX (Preset 5)</option>
-                            <option value="7">Clavinet (Preset 7)</option>
-                            <option value="11">Vibraphone (Preset 11)</option>
-                            <option value="89">Warm Synth Pad (Preset 89)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 3. Master Submix & Limiter Sliders -->
-            <div class="sys-card">
-                <h3>Master Submix Bus & Brickwall Limiter</h3>
-                <div class="sys-grid">
-                    <div>
-                        <div class="slider-row">
-                            <label for="slider-master-vol">Master Volume</label>
-                            <input type="range" id="slider-master-vol" min="0" max="1" step="0.01" value="0.85">
-                            <span id="val-master-vol" class="slider-val">0.85</span>
-                        </div>
-                        <div class="slider-row">
-                            <label for="slider-limiter-thresh">Limiter Threshold</label>
-                            <input type="range" id="slider-limiter-thresh" min="-18" max="0" step="0.5" value="-3">
-                            <span id="val-limiter-thresh" class="slider-val">-3.0 dB</span>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="slider-row">
-                            <label for="slider-mix-rhythm">Drums Mix (Ch 10)</label>
-                            <input type="range" id="slider-mix-rhythm" min="0" max="1" step="0.01" value="1.00">
-                            <span id="val-mix-rhythm" class="slider-val">1.00</span>
-                        </div>
-                        <div class="slider-row">
-                            <label for="slider-mix-bass">Bass Mix (Ch 2)</label>
-                            <input type="range" id="slider-mix-bass" min="0" max="1" step="0.01" value="1.00">
-                            <span id="val-mix-bass" class="slider-val">1.00</span>
-                        </div>
-                        <div class="slider-row">
-                            <label for="slider-mix-chords">Chords Mix (Ch 3)</label>
-                            <input type="range" id="slider-mix-chords" min="0" max="1" step="0.01" value="1.00">
-                            <span id="val-mix-chords" class="slider-val">1.00</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 4. Active MIDI Routing Diagnostics Card -->
-            <div id="sys-content" class="sys-card">
-                <p>Waiting for System Initialization...</p>
-            </div>
+          <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+            <label class="checkbox-pill" title="Hear click during negative precount">
+              <input type="checkbox" id="precount-tick" checked>
+              <span>Audio Tick (Precount)</span>
+            </label>
+            <label class="checkbox-pill" title="Hear click during normal playback">
+              <input type="checkbox" id="playback-tick">
+              <span>Playback Tick</span>
+            </label>
+          </div>
         </div>
-    </main>
 
-    <script type="module">
-        import { TimingEngine } from './TimingEngine.js';
-        import { MidiBridge } from './MidiBridge.js';
-        import { SoundFontManager } from './SoundFontManager.js';
+        <!-- Master Level & Protection -->
+        <div class="master-level-cluster">
+          <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+            <span class="card-section-label">Master Out (<span id="val-master-vol">85%</span>)</span>
+            <input type="range" id="slider-master-vol" min="0" max="100" value="85" style="width: 115px;">
+          </div>
+          <div class="limiter-led-wrap" title="Brickwall Limiter Protection (-3.0 dBFS)">
+            <span class="card-section-label">LIMIT</span>
+            <div id="limiter-led" class="limiter-led ok"></div>
+          </div>
+        </div>
 
-        const messageBox = document.getElementById('message-box');
-        function logToUI(msg) {
-            const time = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 2 });
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
-            messageBox.appendChild(entry);
-            messageBox.scrollTop = messageBox.scrollHeight;
-        }
+        <!-- Snapshot Manager Bar -->
+        <div class="snapshot-manager-bar">
+          <span class="card-section-label">Stage Snapshot Manager</span>
+          <div class="snapshot-controls-row">
+            <input type="text" id="snapshot-name-input" placeholder="Enter Snapshot Name...">
+            <button id="btn-save-snapshot" class="btn btn-green">SAVE SNAPSHOT</button>
+            <select id="snapshot-select" title="Recall Saved Stage Snapshot">
+              <option value="Snapshot 1 (Default)">Snapshot 1 (Default)</option>
+              <option value="Verse Groove">Verse Groove</option>
+              <option value="Chorus Lift">Chorus Lift</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-        const tabBtns = document.querySelectorAll('.tab-btn');
-        const tabContents = document.querySelectorAll('.tab-content');
-        tabBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                tabBtns.forEach(b => b.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById(btn.getAttribute('data-target')).classList.add('active');
-            });
-        });
+      <!-- BLOCK B: Chords Displayer ("Now & Next") -->
+      <div id="chords-displayer-card" class="hw-card chords-displayer-card">
+        <div class="chords-displayer-header">
+          <span class="card-section-label" style="margin: 0;">Harmonic Stage Teleprompter (3m Readability)</span>
+          <button id="btn-fold-chords" class="fold-toggle-btn" title="Collapse / Expand Chords Displayer">[-]</button>
+        </div>
 
-        const engine = new TimingEngine();
-        const soundFontManager = new SoundFontManager(null);
-        const midiBridge = new MidiBridge(null, soundFontManager);
+        <div class="chords-displayer-grid">
+          <div class="chord-stage-panel now-panel">
+            <div id="chord-now-meta" class="chord-stage-meta">NOW • BEAT 1 / 4</div>
+            <div id="chord-now-symbol" class="chord-stage-symbol">Am7</div>
+          </div>
 
-        // Status badge & logging callback for SoundFontManager
-        const sfStatusBadge = document.getElementById('sf-status-badge');
-        soundFontManager.onStatusChange = (statusText, isReady) => {
-            if (sfStatusBadge) {
-                sfStatusBadge.textContent = `SoundFont: ${statusText}`;
-                sfStatusBadge.className = `route-badge ${isReady ? 'bound' : 'fallback'}`;
-            }
-            logToUI(`[SF2] ${statusText}`);
+          <div class="chord-stage-panel next-panel">
+            <div id="chord-next-meta" class="chord-stage-meta">NEXT • BAR 2</div>
+            <div id="chord-next-symbol" class="chord-stage-symbol">D7</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOCK C: The Loops & Pattern Palette (Split Grid) -->
+      <div class="hw-card loops-workspace-grid">
+        <!-- Left Column: 3 Loop Tracks (DRUMS, BASS, CHORDS) -->
+        <div>
+          <span class="card-section-label">The Loops — Active Chained Pattern Slots & Submix Levels</span>
+          <div id="stage-tracks-container" class="tracks-column"></div>
+        </div>
+
+        <!-- Right Column: Pattern Palette -->
+        <aside class="pattern-palette-card">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="card-section-label" style="margin: 0;">Pattern Palette</span>
+            <span style="font-size: 0.7rem; color: var(--color-text-dim);">Drag or Click</span>
+          </div>
+
+          <div id="palette-filter-chips" class="filter-chips-row">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="drums">Drums</button>
+            <button class="filter-chip" data-filter="bass">Bass</button>
+            <button class="filter-chip" data-filter="chords">Chords</button>
+          </div>
+
+          <input type="text" id="palette-search-input" placeholder="Filter patterns (e.g. Funk, D-01)...">
+
+          <div id="palette-tiles-grid" class="palette-tiles-grid"></div>
+        </aside>
+      </div>
+
+    </section>
+
+    <!-- ======================================================================
+         VIEW 2: UNIFIED PATTERNS LIBRARY & EDITORS (#view-patterns)
+         ====================================================================== -->
+    <section id="view-patterns" class="view-container">
+
+      <!-- SUB-VIEW 2A: The Pattern Library Table -->
+      <div id="pattern-library-view" class="hw-card">
+        <div class="patterns-toolbar">
+          <div class="patterns-toolbar-left">
+            <input type="text" id="library-search-input" placeholder="Search pattern ID or name..." style="width: 220px;">
+            <div id="library-filter-chips" class="filter-chips-row">
+              <button class="filter-chip active" data-filter="all">All</button>
+              <button class="filter-chip" data-filter="drums">Drums</button>
+              <button class="filter-chip" data-filter="bass">Bass</button>
+              <button class="filter-chip" data-filter="chords">Chords</button>
+            </div>
+          </div>
+
+          <div class="patterns-toolbar-right">
+            <button id="btn-new-pattern" class="btn btn-green">+ NEW PATTERN</button>
+            <button class="btn btn-gold btn-open-chords-dict">CHORDS DICTIONARY</button>
+          </div>
+        </div>
+
+        <div id="pattern-table-list" class="pattern-table-list"></div>
+      </div>
+
+      <!-- SUB-VIEW 2B-1: Drum Lab Editor (#editor-drums) -->
+      <div id="editor-drums" class="hw-card editor-panel">
+        <div class="editor-top-nav">
+          <button class="btn btn-back-to-patterns">← BACK TO PATTERNS</button>
+          <div id="drum-ed-title" class="editor-active-title" style="color: var(--color-drums);">Editing: D-01 FunkBeat</div>
+          <button class="btn btn-green btn-save-pattern">SAVE CHANGES</button>
+        </div>
+
+        <div class="editor-control-strip">
+          <div class="ctrl-field">
+            <span class="card-section-label">Pattern Name</span>
+            <input type="text" id="drum-ed-name" maxlength="12" style="width: 130px;">
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Time Signature</span>
+            <select id="drum-ed-timesig">
+              <option value="4/4">4/4</option>
+              <option value="7/8">7/8</option>
+              <option value="5/4">5/4</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Tempo Sync</span>
+            <label class="checkbox-pill" style="height: 30px;">
+              <input type="checkbox" id="drum-ed-sync" checked>
+              <span>Sync with Master</span>
+            </label>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Bars (1–4)</span>
+            <div class="stepper">
+              <button id="drum-bars-dec" class="stepper-btn">−</button>
+              <span id="drum-ed-bars" class="stepper-val">1</span>
+              <button id="drum-bars-inc" class="stepper-btn">+</button>
+            </div>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Step Resolution</span>
+            <select id="drum-ed-res">
+              <option value="1/8">1/8</option>
+              <option value="1/16" selected>1/16</option>
+              <option value="1/32">1/32</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Rhythm Tension (<span id="drum-ed-tension-val">35%</span>)</span>
+            <input type="range" id="drum-ed-tension" min="0" max="100" value="35" style="width: 120px;">
+          </div>
+
+          <div class="ctrl-field" style="margin-left: auto;">
+            <span class="card-section-label">Audition</span>
+            <button id="btn-drum-solo" class="btn btn-green">▶ PLAY SOLO</button>
+          </div>
+        </div>
+
+        <div style="font-size: 0.76rem; color: var(--color-text-dim);">
+          4-State Step Cycle: <strong style="color: #888;">Off</strong> → <strong style="color: var(--color-drums);">Hit</strong> → <strong style="color: #fff;">Accent (Glow)</strong> → <strong style="color: var(--color-chords);">Ghost Note (Amber Outline)</strong>
+        </div>
+
+        <div id="drum-matrix-container" class="drum-matrix-container"></div>
+      </div>
+
+      <!-- SUB-VIEW 2B-2: Bassline Editor (#editor-bass) -->
+      <div id="editor-bass" class="hw-card editor-panel">
+        <div class="editor-top-nav">
+          <button class="btn btn-back-to-patterns">← BACK TO PATTERNS</button>
+          <div id="bass-ed-title" class="editor-active-title" style="color: var(--color-bass);">Editing: B-01 Walking</div>
+          <button class="btn btn-green btn-save-pattern">SAVE CHANGES</button>
+        </div>
+
+        <div class="editor-control-strip">
+          <div class="ctrl-field">
+            <span class="card-section-label">Pattern Name</span>
+            <input type="text" id="bass-ed-name" maxlength="12" style="width: 130px;">
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Time Signature</span>
+            <select id="bass-ed-timesig">
+              <option value="4/4">4/4</option>
+              <option value="7/8">7/8</option>
+              <option value="5/4">5/4</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Tempo Sync</span>
+            <label class="checkbox-pill" style="height: 30px;">
+              <input type="checkbox" id="bass-ed-sync" checked>
+              <span>Sync with Master</span>
+            </label>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Resolution</span>
+            <select id="bass-ed-res">
+              <option value="1/8">1/8</option>
+              <option value="1/16" selected>1/16 (16 Steps)</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">SoundFont Preset (Ch 2)</span>
+            <select id="bass-ed-preset">
+              <option value="33">Ch 2: Fingered Bass</option>
+              <option value="34">Ch 2: Picked Bass</option>
+              <option value="35">Ch 2: Fretless Bass</option>
+              <option value="36">Ch 2: Slap Bass 1</option>
+              <option value="38">Ch 2: Synth Bass 1</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Pitch Mode</span>
+            <div class="mode-toggle-group">
+              <button id="bass-mode-strict" class="mode-toggle-btn">STRICT PITCH</button>
+              <button id="bass-mode-follower" class="mode-toggle-btn active">HARMONIC FOLLOWER</button>
+            </div>
+          </div>
+
+          <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
+            <button id="btn-rehearsal-mute-bass" class="btn-rehearsal-mute" title="Silence bass track to practice on physical bass">MUTE BASS</button>
+            <button id="btn-bass-solo" class="btn btn-green">▶ PLAY SOLO</button>
+          </div>
+        </div>
+
+        <div class="bass-ribbon-scroll">
+          <div id="bass-step-ribbon" class="bass-step-ribbon"></div>
+        </div>
+      </div>
+
+      <!-- SUB-VIEW 2B-3: Chord Editor (#editor-chords) -->
+      <div id="editor-chords" class="hw-card editor-panel">
+        <div class="editor-top-nav">
+          <button class="btn btn-back-to-patterns">← BACK TO PATTERNS</button>
+          <div id="chord-ed-title" class="editor-active-title" style="color: var(--color-chords);">Editing: C-01 Drop2</div>
+          <button class="btn btn-green btn-save-pattern">SAVE CHANGES</button>
+        </div>
+
+        <div class="editor-control-strip">
+          <div class="ctrl-field">
+            <span class="card-section-label">Sequence Name</span>
+            <input type="text" id="chord-ed-name" maxlength="12" style="width: 130px;">
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Time Signature</span>
+            <select id="chord-ed-timesig">
+              <option value="4/4">4/4</option>
+              <option value="3/4">3/4</option>
+              <option value="6/8">6/8</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Tempo Sync</span>
+            <label class="checkbox-pill" style="height: 30px;">
+              <input type="checkbox" id="chord-ed-sync" checked>
+              <span>Sync with Master</span>
+            </label>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Harmonic Resolution</span>
+            <div class="mode-toggle-group">
+              <button class="mode-toggle-btn chord-res-btn" data-res="1/1">1/1 Bar</button>
+              <button class="mode-toggle-btn chord-res-btn active" data-res="1/2">1/2 Bar</button>
+              <button class="mode-toggle-btn chord-res-btn" data-res="1/4">1/4 Beat</button>
+            </div>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Voicing Style</span>
+            <select id="chord-ed-voicing">
+              <option value="Jazz Drop-2">Jazz Drop-2</option>
+              <option value="Pop Triads">Pop Triads</option>
+              <option value="Quartal Open">Quartal Open</option>
+              <option value="Lush Pad">Lush Pad</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">SoundFont Preset (Ch 3)</span>
+            <select id="chord-ed-preset">
+              <option value="0">Ch 3: Acoustic Piano</option>
+              <option value="4">Ch 3: Rhodes EP</option>
+              <option value="5">Ch 3: DX EP</option>
+              <option value="11">Ch 3: Vibraphone</option>
+              <option value="89">Ch 3: Warm Synth Pad</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Harmonic Tension (<span id="chord-ed-tension-val">25%</span>)</span>
+            <input type="range" id="chord-ed-tension" min="0" max="100" value="25" style="width: 110px; accent-color: var(--color-chords);">
+          </div>
+
+          <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
+            <button class="btn btn-gold btn-open-chords-dict">CHORDS DICTIONARY</button>
+            <button id="btn-chord-solo" class="btn btn-green">▶ PLAY SOLO</button>
+          </div>
+        </div>
+
+        <div id="chord-measures-grid" class="chord-measures-grid"></div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================================
+         VIEW 3: SYSTEM SETTINGS (#view-settings)
+         ====================================================================== -->
+    <section id="view-settings" class="view-container">
+      <div class="settings-cards-grid">
+
+        <!-- Card 1: MIDI Routing & Ports -->
+        <div class="hw-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card-title">Card 1: MIDI Routing & Hardware Ports</h3>
+            <span class="badge-mono">Web MIDI API</span>
+          </div>
+          <div id="sys-content">
+            <div class="routing-row">
+              <span><strong style="color: var(--color-drums);">RHYTHM</strong> (Channel 10 — Akai MPX8 / Drums)</span>
+              <span class="route-badge fallback">Internal SoundFont</span>
+            </div>
+            <div class="routing-row">
+              <span><strong style="color: var(--color-bass);">BASS</strong> (Channel 2 — Roland TB-3 / Bass)</span>
+              <span class="route-badge fallback">Internal SoundFont</span>
+            </div>
+            <div class="routing-row">
+              <span><strong style="color: var(--color-chords);">CHORDS</strong> (Channel 3 — Virtual Loopback / Keys)</span>
+              <span class="route-badge fallback">Internal SoundFont</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: SoundFont2 Engine (FluidR3_GM.sf2) -->
+        <div class="hw-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card-title">Card 2: SoundFont2 Engine (FluidR3_GM.sf2)</h3>
+            <span id="sf-status-badge" class="route-badge fallback">IndexedDB: Checking...</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--color-text-dim); margin-top: 0;">
+            Load <code>FluidR3_GM.sf2</code> (~145 MB) once from disk. The raw binary is persisted in IndexedDB for instant offline startup on every launch.
+          </p>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
+            <input type="file" id="sf-file-input" accept=".sf2" style="display: none;">
+            <button id="btn-load-sf" class="btn btn-green">Load Local .sf2</button>
+            <button id="btn-clear-sf" class="btn btn-danger">Clear Cached SoundFont</button>
+          </div>
+        </div>
+
+        <!-- Card 3: Audio & Limiter Settings -->
+        <div class="hw-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card-title">Card 3: Audio & Brickwall Limiter Settings</h3>
+            <span class="badge-mono">128 samples / 2.9 ms</span>
+          </div>
+          <div class="routing-row">
+            <span>AudioContext Latency / Buffer Profile</span>
+            <span class="badge-mono" style="color: var(--color-drums);">Interactive (128 frames @ 44.1 kHz)</span>
+          </div>
+          <div class="routing-row">
+            <span>Master Limiter Threshold (<span id="val-limiter-thresh" style="color: var(--color-chords); font-family: var(--font-mono);">-3.0 dBFS</span>)</span>
+            <input type="range" id="slider-limiter-thresh" min="-18" max="0" step="0.5" value="-3">
+          </div>
+          <div class="routing-row">
+            <span>Brickwall Ratio & Safety Release</span>
+            <span class="badge-mono">12:1 • Attack 3 ms / Release 150 ms</span>
+          </div>
+        </div>
+
+        <!-- Card 4: UI Preferences -->
+        <div class="hw-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card-title">Card 4: UI & Stage Preferences</h3>
+            <span class="badge-mono">Display</span>
+          </div>
+          <div class="routing-row">
+            <span>Show Chords Displayer ("Now & Next") on Main Stage</span>
+            <label class="checkbox-pill">
+              <input type="checkbox" id="pref-show-chords" checked>
+              <span>Visible</span>
+            </label>
+          </div>
+          <div class="routing-row">
+            <span>High Contrast / Rehearsal Stage Mode</span>
+            <label class="checkbox-pill">
+              <input type="checkbox" id="pref-high-contrast">
+              <span>High Contrast</span>
+            </label>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================================
+       3. PINNED DIAGNOSTIC CONSOLE FOOTER (#system-logger)
+       ======================================================================== -->
+  <footer id="system-logger">
+    <div id="logger-toggle-bar" class="logger-bar" title="Click to expand/collapse System Console">
+      <div class="logger-latest">
+        <span class="logger-prompt">AUTOBAND://CONSOLE &gt;</span>
+        <span id="logger-latest-text">Initializing UI shell...</span>
+      </div>
+      <span id="logger-expand-icon" style="color: var(--color-text-dim); font-size: 0.72rem;">[▲ Expand Console]</span>
+    </div>
+    <div id="message-box" class="logger-history"></div>
+  </footer>
+
+  <!-- ========================================================================
+       MODALS: CHORDS DICTIONARY, NEW PATTERN, DELETE CONFIRMATION
+       ======================================================================== -->
+
+  <!-- Modal 1: Chords Dictionary & Modal Interchange Reference -->
+  <div id="modal-chords-dict" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">CHORDS DICTIONARY & MODAL INTERCHANGE MATRIX</h3>
+        <button class="btn" data-close-modal="modal-chords-dict">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.84rem; color: var(--color-text-dim); margin-top: 0;">
+          Reference table of common jazz/fusion chord qualities, interval formulas, and parallel C-root modal interchange degrees.
+        </p>
+        <table class="dict-table">
+          <thead>
+            <tr>
+              <th>Mode / Scale</th>
+              <th>I</th>
+              <th>II</th>
+              <th>III</th>
+              <th>IV</th>
+              <th>V</th>
+              <th>VI</th>
+              <th>VII</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Ionian (Major)</strong></td>
+              <td><code>CMaj7</code></td>
+              <td><code>Dm7</code></td>
+              <td><code>Em7</code></td>
+              <td><code>FMaj7</code></td>
+              <td><code>G7</code></td>
+              <td><code>Am7</code></td>
+              <td><code>Bm7b5</code></td>
+            </tr>
+            <tr>
+              <td><strong>Dorian</strong></td>
+              <td><code>Cm7</code></td>
+              <td><code>Dm7</code></td>
+              <td><code>EbMaj7</code></td>
+              <td><code>F7</code></td>
+              <td><code>Gm7</code></td>
+              <td><code>Am7b5</code></td>
+              <td><code>BbMaj7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Phrygian</strong></td>
+              <td><code>Cm7</code></td>
+              <td><code>DbMaj7</code></td>
+              <td><code>Eb7</code></td>
+              <td><code>Fm7</code></td>
+              <td><code>Gm7b5</code></td>
+              <td><code>AbMaj7</code></td>
+              <td><code>Bbm7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Lydian</strong></td>
+              <td><code>CMaj7</code></td>
+              <td><code>D7</code></td>
+              <td><code>Em7</code></td>
+              <td><code>F#m7b5</code></td>
+              <td><code>GMaj7</code></td>
+              <td><code>Am7</code></td>
+              <td><code>Bm7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Mixolydian</strong></td>
+              <td><code>C7</code></td>
+              <td><code>Dm7</code></td>
+              <td><code>Em7b5</code></td>
+              <td><code>FMaj7</code></td>
+              <td><code>Gm7</code></td>
+              <td><code>Am7</code></td>
+              <td><code>BbMaj7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Aeolian (Nat. Minor)</strong></td>
+              <td><code>Cm7</code></td>
+              <td><code>Dm7b5</code></td>
+              <td><code>EbMaj7</code></td>
+              <td><code>Fm7</code></td>
+              <td><code>Gm7</code></td>
+              <td><code>AbMaj7</code></td>
+              <td><code>Bb7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Harmonic Minor</strong></td>
+              <td><code>CmMaj7</code></td>
+              <td><code>Dm7b5</code></td>
+              <td><code>EbMaj7#5</code></td>
+              <td><code>Fm7</code></td>
+              <td><code>G7b9</code></td>
+              <td><code>AbMaj7</code></td>
+              <td><code>Bdim7</code></td>
+            </tr>
+            <tr>
+              <td><strong>Melodic Minor</strong></td>
+              <td><code>CmMaj7</code></td>
+              <td><code>Dm7</code></td>
+              <td><code>EbMaj7#5</code></td>
+              <td><code>F7</code></td>
+              <td><code>G7</code></td>
+              <td><code>Am7b5</code></td>
+              <td><code>Bm7b5</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Create New Pattern -->
+  <div id="modal-new-pattern" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--color-drums);">CREATE NEW PATTERN</h3>
+        <button class="btn" data-close-modal="modal-new-pattern">✕</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <p style="margin: 0; font-size: 0.85rem; color: var(--color-text-dim);">Select the instrument engine for your new pattern:</p>
+        <button class="btn btn-green btn-create-pattern-type" data-type="drums" style="justify-content: space-between; padding: 0.75rem 1rem;">
+          <span>DRUM LAB PATTERN (10-Row Step Matrix)</span>
+          <span>D-XX →</span>
+        </button>
+        <button class="btn btn-create-pattern-type" data-type="bass" style="border-color: var(--color-bass); color: var(--color-bass); justify-content: space-between; padding: 0.75rem 1rem;">
+          <span>BASSLINE PATTERN (16-Step Monophonic Ribbon)</span>
+          <span>B-XX →</span>
+        </button>
+        <button class="btn btn-gold btn-create-pattern-type" data-type="chords" style="justify-content: space-between; padding: 0.75rem 1rem;">
+          <span>CHORD PROGRESSION (4-Bar Harmonic Grid)</span>
+          <span>C-XX →</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Delete Confirmation -->
+  <div id="modal-delete-confirm" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: #ff4d5e;">CONFIRM PATTERN DELETION</h3>
+        <button class="btn" data-close-modal="modal-delete-confirm">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="delete-modal-message" style="margin-top: 0; font-size: 0.9rem;">Are you sure you want to delete this pattern?</p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 1.25rem;">
+          <button class="btn" data-close-modal="modal-delete-confirm">CANCEL</button>
+          <button id="btn-confirm-delete-pattern" class="btn btn-danger">CONFIRM DELETE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       APPLICATION BOOTSTRAP SCRIPT
+       ======================================================================== -->
+  <script type="module">
+    import { TimingEngine } from './TimingEngine.js';
+    import { MidiBridge } from './MidiBridge.js';
+    import { SoundFontManager } from './SoundFontManager.js';
+    import { AppUI } from './src/AppUI.js';
+
+    const engine = new TimingEngine();
+    const soundFontManager = new SoundFontManager(null);
+    const midiBridge = new MidiBridge(null, soundFontManager);
+
+    let isInitialized = false;
+    let initPromise = null;
+    let appUI = null;
+
+    function renderSystemMidiRouting(diag) {
+      const container = document.getElementById('sys-content');
+      if (!container) return;
+
+      const colorMap = {
+        rhythm: 'var(--color-drums)',
+        bass: 'var(--color-bass)',
+        chords: 'var(--color-chords)'
+      };
+
+      let html = '';
+      ['rhythm', 'bass', 'chords'].forEach(mod => {
+        const d = diag[mod];
+        const badgeClass = d.isFallback ? 'fallback' : 'bound';
+        const badgeText = d.isFallback ? 'Fallback (SoundFont)' : 'Hardware / Virtual';
+        html += `
+          <div class="routing-row">
+            <span>
+              <strong style="color: ${colorMap[mod]}; text-transform: uppercase;">${mod}</strong>
+              — ${d.portName} <em>(Ch ${d.channel})</em>
+            </span>
+            <span class="route-badge ${badgeClass}">${badgeText}</span>
+          </div>
+        `;
+      });
+
+      html += `<div style="margin-top: 0.75rem; font-size: 0.78rem; color: var(--color-text-dim);">
+        <strong>Detected MIDI Outputs:</strong> ${diag.allPorts.map(p => p.name).join(' • ')}
+      </div>`;
+
+      container.innerHTML = html;
+    }
+
+    async function ensureSystemInitialized() {
+      if (isInitialized) return;
+      if (initPromise) return initPromise;
+
+      initPromise = (async () => {
+        isInitialized = true;
+
+        engine.initAudioContext();
+        soundFontManager.audioCtx = engine.audioCtx;
+        midiBridge.audioCtx = engine.audioCtx;
+        midiBridge.setSoundFontManager(soundFontManager);
+
+        if (appUI) appUI.log('[AUDIO] Web Audio Engine Initialized.');
+
+        await soundFontManager.init();
+
+        midiBridge.onPortsChanged = (diagnostics) => {
+          renderSystemMidiRouting(diagnostics);
+          if (appUI) {
+            appUI.log('[MIDI] Routing matrix updated.');
+          }
         };
 
-        const btnPlay = document.getElementById('btn-play');
-        const bpmSlider = document.getElementById('bpm-slider');
-        const bpmInput = document.getElementById('bpm-input');
-        
-        const precountInput = document.getElementById('precount-input');
-        const precountTick = document.getElementById('precount-tick');
-        const playbackTick = document.getElementById('playback-tick');
+        await midiBridge.init();
+      })();
 
-        function updateMetronomeSettings() {
-            engine.setPrecountSettings(
-                precountInput.value, 
-                precountTick.checked, 
-                playbackTick.checked
-            );
-        }
+      return initPromise;
+    }
 
-        precountInput.addEventListener('change', updateMetronomeSettings);
-        precountTick.addEventListener('change', updateMetronomeSettings);
-        playbackTick.addEventListener('change', updateMetronomeSettings);
+    appUI = new AppUI({
+      engine,
+      midiBridge,
+      soundFontManager,
+      ensureSystemInitialized
+    });
 
-        async function togglePlayback() {
-            await ensureSystemInitialized();
-            if (!engine.isPlaying) {
-                updateMetronomeSettings(); 
-                engine.start();
-                btnPlay.innerText = "STOP";
-                btnPlay.style.backgroundColor = "#ff5252"; 
-                logToUI(`Sequencer STARTED at ${engine.tempo} BPM`);
-            } else {
-                engine.stop();
-                btnPlay.innerText = "PLAY";
-                btnPlay.style.backgroundColor = "var(--accent)";
-                logToUI("Sequencer STOPPED");
+    const sfStatusBadge = document.getElementById('sf-status-badge');
+    soundFontManager.onStatusChange = (statusText, isReady) => {
+      if (sfStatusBadge) {
+        sfStatusBadge.textContent = isReady ? 'IndexedDB: READY (FluidR3_GM.sf2)' : statusText;
+        sfStatusBadge.className = `route-badge ${isReady ? 'bound' : 'fallback'}`;
+      }
+      appUI.log(`[SF2] ${statusText}`);
+    };
+
+    appUI.init();
+
+    // Initialize audio & MIDI on first user interaction anywhere in document
+    document.body.addEventListener('click', () => {
+      ensureSystemInitialized();
+    }, { once: true });
+
+    // Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((registration) => {
+            const statusElem = document.getElementById('pwa-status');
+            if (statusElem) {
+              statusElem.textContent = 'PWA: Offline Ready';
+              statusElem.style.color = 'var(--color-drums)';
+              statusElem.style.borderColor = 'var(--color-drums)';
             }
-        }
-
-        btnPlay.addEventListener('click', togglePlayback);
-        bpmSlider.addEventListener('input', (e) => { engine.setTempo(e.target.value); bpmInput.value = e.target.value; });
-        bpmInput.addEventListener('change', (e) => { engine.setTempo(e.target.value); bpmSlider.value = e.target.value; });
-
-        const pulseIndicator = document.getElementById('pulse-indicator');
-        const visualMetroToggle = document.getElementById('visual-metro-toggle');
-        const masterTimeDisplay = document.getElementById('master-time');
-        let visualPulseEnabled = true;
-
-        visualMetroToggle.addEventListener('change', (e) => {
-            visualPulseEnabled = e.target.checked;
-            if (!visualPulseEnabled) {
-                pulseIndicator.style.backgroundColor = '#333';
-                pulseIndicator.style.boxShadow = 'none';
+            appUI.log(`[PWA] Service Worker active (Scope: ${registration.scope})`);
+          })
+          .catch((error) => {
+            const statusElem = document.getElementById('pwa-status');
+            if (statusElem) {
+              statusElem.textContent = 'PWA: Offline Failed';
+              statusElem.style.color = 'var(--color-playing-border)';
             }
-        });
-
-        engine.onPulseCallback = (pulseNumber, scheduledTime) => {
-            if (visualPulseEnabled && engine.audioCtx) {
-                const timeUntilPulse = (scheduledTime - engine.audioCtx.currentTime) * 1000;
-                
-                const isPrecount = pulseNumber < 0;
-                const flashColor = isPrecount ? 'var(--precount-color)' : 'var(--accent)';
-
-                setTimeout(() => {
-                    pulseIndicator.style.backgroundColor = flashColor;
-                    pulseIndicator.style.boxShadow = `0 0 10px ${flashColor}`;
-                    setTimeout(() => {
-                        pulseIndicator.style.backgroundColor = '#333';
-                        pulseIndicator.style.boxShadow = 'none';
-                    }, 100); 
-                }, Math.max(0, timeUntilPulse));
-            }
-        };
-
-        function updateClockDisplay() {
-            if (engine.isPlaying) {
-                const elapsedSecs = engine.getElapsedTime();
-                const isNegative = elapsedSecs < 0;
-                const absSecs = Math.abs(elapsedSecs);
-                
-                const mins = Math.floor(absSecs / 60).toString().padStart(2, '0');
-                const secs = Math.floor(absSecs % 60).toString().padStart(2, '0');
-                const tenths = Math.floor((absSecs % 1) * 10);
-                
-                const sign = isNegative ? "-" : "";
-                masterTimeDisplay.innerText = `${sign}${mins}:${secs}.${tenths}`;
-                
-                if (isNegative) {
-                    masterTimeDisplay.classList.add('precount-active');
-                } else {
-                    masterTimeDisplay.classList.remove('precount-active');
-                }
-            } else {
-                masterTimeDisplay.innerText = "00:00.0";
-                masterTimeDisplay.classList.remove('precount-active');
-            }
-            requestAnimationFrame(updateClockDisplay);
-        }
-        requestAnimationFrame(updateClockDisplay); 
-
-        window.addEventListener('keydown', (e) => {
-            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
-            if (e.code === 'Space') {
-                e.preventDefault(); 
-                togglePlayback();
-            }
-        });
-
-        // Diagnostics UI Builder
-        function renderSystemTab(diag) {
-            const container = document.getElementById('sys-content');
-            
-            let html = `<h3>Active Auto-Discovery Routing</h3>`;
-            ['rhythm', 'bass', 'chords'].forEach(mod => {
-                const d = diag[mod];
-                const badgeClass = d.isFallback ? 'fallback' : 'bound';
-                const badgeText = d.isFallback ? 'Fallback (Internal)' : 'Hardware/Virtual';
-                
-                html += `
-                <div class="routing-item">
-                    <div>
-                        <span class="route-mod">${mod}</span>
-                        <span>${d.portName} <em>(Ch ${d.channel})</em></span>
-                    </div>
-                    <span class="route-badge ${badgeClass}">${badgeText}</span>
-                </div>`;
-            });
-
-            html += `<h3 style="margin-top: 1.5rem;">Detected MIDI Outputs</h3><ul>`;
-            diag.allPorts.forEach(port => {
-                html += `<li style="color: var(--text-secondary); margin-bottom: 0.3rem;">${port.name} <small>(${port.id})</small></li>`;
-            });
-            html += `</ul>`;
-            
-            container.innerHTML = html;
-        }
-
-        // System Initialization Lifecycle
-        let isInitialized = false;
-        let initPromise = null;
-
-        async function ensureSystemInitialized() {
-            if (isInitialized) return;
-            if (initPromise) return initPromise;
-
-            initPromise = (async () => {
-                isInitialized = true;
-
-                // 1. Init AudioContext
-                engine.initAudioContext();
-                logToUI("Audio Engine Initialized.");
-
-                // 2. Link AudioContext to SoundFontManager & MidiBridge
-                soundFontManager.audioCtx = engine.audioCtx;
-                midiBridge.audioCtx = engine.audioCtx;
-                midiBridge.setSoundFontManager(soundFontManager);
-
-                // 3. Boot SoundFontManager from IndexedDB Cache
-                await soundFontManager.init();
-
-                // 4. Run Web MIDI Pre-Flight Auto-Discovery
-                logToUI("Starting Web MIDI Pre-Flight Auto-Discovery...");
-                midiBridge.onPortsChanged = (diagnostics) => {
-                    renderSystemTab(diagnostics);
-                    logToUI(`[SYS] MIDI Routing Matrix Updated.`);
-                    ['rhythm', 'bass', 'chords'].forEach(mod => {
-                        const d = diagnostics[mod];
-                        logToUI(`--> ${mod.toUpperCase()} bound to: ${d.portName} (Ch ${d.channel}) ${d.isFallback ? '[FALLBACK]' : ''}`);
-                    });
-                };
-
-                const midiReady = await midiBridge.init();
-                if (!midiReady) {
-                    logToUI("[SYS] WARNING: Web MIDI denied or unsupported. Defaulting to internal SoundFont / Web Audio.");
-                }
-            })();
-
-            return initPromise;
-        }
-
-        document.body.addEventListener('click', () => {
-            ensureSystemInitialized();
-        }, { once: true });
-
-        // Wire SoundFont File Picker & Cache Clear Button
-        const sfFileInput = document.getElementById('sf-file-input');
-        const btnClearSf = document.getElementById('btn-clear-sf');
-
-        sfFileInput.addEventListener('change', async (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-            await ensureSystemInitialized();
-            try {
-                await soundFontManager.loadFromFile(file);
-            } catch (err) {
-                logToUI(`[SF2] ERROR loading ${file.name}: ${err.message}`);
-            }
-        });
-
-        btnClearSf.addEventListener('click', async () => {
-            await ensureSystemInitialized();
-            await soundFontManager.clearCache();
-            sfFileInput.value = '';
-        });
-
-        // Wire Audition / Test Buttons
-        document.getElementById('btn-test-drums').addEventListener('click', async () => {
-            await ensureSystemInitialized();
-            const now = engine.audioCtx.currentTime;
-            midiBridge.sendNoteOn('rhythm', 36, 115, now, 0.2);        // Kick
-            midiBridge.sendNoteOn('rhythm', 42, 95,  now + 0.15, 0.15); // Closed Hat
-            midiBridge.sendNoteOn('rhythm', 38, 110, now + 0.30, 0.2);  // Snare
-        });
-
-        document.getElementById('btn-test-bass').addEventListener('click', async () => {
-            await ensureSystemInitialized();
-            const now = engine.audioCtx.currentTime;
-            midiBridge.sendNoteOn('bass', 36, 110, now, 0.35);          // C2
-            midiBridge.sendNoteOn('bass', 43, 100, now + 0.25, 0.35);   // G2
-        });
-
-        document.getElementById('btn-test-chords').addEventListener('click', async () => {
-            await ensureSystemInitialized();
-            const now = engine.audioCtx.currentTime;
-            [60, 64, 67, 71].forEach(note => {
-                midiBridge.sendNoteOn('chords', note, 95, now, 0.6);    // Cmaj7
-            });
-        });
-
-        // Wire On-The-Fly Preset Pickers
-        const presetRhythm = document.getElementById('preset-rhythm');
-        const presetBass = document.getElementById('preset-bass');
-        const presetChords = document.getElementById('preset-chords');
-
-        presetRhythm.addEventListener('change', (e) => {
-            const opt = e.target.options[e.target.selectedIndex];
-            soundFontManager.setPreset(10, 128, parseInt(e.target.value, 10), opt.text);
-            logToUI(`[SF2] Drums preset -> ${opt.text}`);
-        });
-
-        presetBass.addEventListener('change', (e) => {
-            const opt = e.target.options[e.target.selectedIndex];
-            soundFontManager.setPreset(2, 0, parseInt(e.target.value, 10), opt.text);
-            logToUI(`[SF2] Bass preset -> ${opt.text}`);
-        });
-
-        presetChords.addEventListener('change', (e) => {
-            const opt = e.target.options[e.target.selectedIndex];
-            soundFontManager.setPreset(3, 0, parseInt(e.target.value, 10), opt.text);
-            logToUI(`[SF2] Chords preset -> ${opt.text}`);
-        });
-
-        // Wire Master Submix & Limiter Sliders
-        const sliderMasterVol = document.getElementById('slider-master-vol');
-        const valMasterVol = document.getElementById('val-master-vol');
-        sliderMasterVol.addEventListener('input', (e) => {
-            valMasterVol.textContent = parseFloat(e.target.value).toFixed(2);
-            soundFontManager.setMasterVolume(e.target.value);
-        });
-
-        const sliderLimiterThresh = document.getElementById('slider-limiter-thresh');
-        const valLimiterThresh = document.getElementById('val-limiter-thresh');
-        sliderLimiterThresh.addEventListener('input', (e) => {
-            valLimiterThresh.textContent = `${parseFloat(e.target.value).toFixed(1)} dB`;
-            soundFontManager.setLimiterThreshold(e.target.value);
-        });
-
-        ['rhythm', 'bass', 'chords'].forEach((mod) => {
-            const slider = document.getElementById(`slider-mix-${mod}`);
-            const label = document.getElementById(`val-mix-${mod}`);
-            slider.addEventListener('input', (e) => {
-                label.textContent = parseFloat(e.target.value).toFixed(2);
-                soundFontManager.setModuleVolume(mod, e.target.value);
-            });
-        });
-
-        logToUI("AutoBand UI Ready. Click anywhere to run System Initialization.");
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then((registration) => {
-                        console.log('[AutoBand] SW registered:', registration.scope);
-                        const statusElem = document.getElementById('pwa-status');
-                        if (statusElem) {
-                            statusElem.textContent = 'PWA: Ready (Offline Active)';
-                            statusElem.style.color = 'var(--accent)';
-                            statusElem.style.borderColor = 'var(--accent)';
-                        }
-                        logToUI(`[PWA] Service Worker registered (Scope: ${registration.scope})`);
-                    })
-                    .catch((error) => {
-                        console.error('[AutoBand] SW registration failed:', error);
-                        const statusElem = document.getElementById('pwa-status');
-                        if (statusElem) {
-                            statusElem.textContent = 'PWA: Offline Failed';
-                            statusElem.style.color = '#ff5252';
-                        }
-                        logToUI(`[PWA] Service Worker registration failed: ${error.message}`);
-                    });
-            });
-        }
-
-    </script>
+            appUI.log(`[PWA] Service Worker error: ${error.message}`);
+          });
+      });
+    }
+  </script>
 </body>
 </html>
