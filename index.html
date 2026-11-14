@@ -123,13 +123,21 @@
 
         <div class="chords-displayer-grid">
           <div class="chord-stage-panel now-panel">
-            <div id="chord-now-meta" class="chord-stage-meta">NOW • BEAT 1 / 4</div>
-            <div id="chord-now-symbol" class="chord-stage-symbol">Am7</div>
+            <div id="chord-now-meta" class="chord-stage-meta">NOW • BAR 1 • BEAT 1 / 4</div>
+            <div id="chord-now-symbol" class="chord-stage-symbol chord-stage-bar-row">
+              <span class="chord-bar-item is-active">Am7</span>
+              <span class="chord-bar-sep">·</span>
+              <span class="chord-bar-item">D7</span>
+            </div>
           </div>
 
           <div class="chord-stage-panel next-panel">
-            <div id="chord-next-meta" class="chord-stage-meta">NEXT • BAR 2</div>
-            <div id="chord-next-symbol" class="chord-stage-symbol">D7</div>
+            <div id="chord-next-meta" class="chord-stage-meta">NEXT BAR • BAR 2</div>
+            <div id="chord-next-symbol" class="chord-stage-symbol chord-stage-bar-row">
+              <span class="chord-bar-item">Gmaj7</span>
+              <span class="chord-bar-sep">·</span>
+              <span class="chord-bar-item">Cmaj7</span>
+            </div>
           </div>
         </div>
       </div>
@@ -138,7 +146,11 @@
       <div class="hw-card loops-workspace-grid">
         <!-- Left Column: 3 Loop Tracks (DRUMS, BASS, CHORDS) -->
         <div>
-          <span class="card-section-label">The Loops — Active Chained Pattern Slots & Submix Levels</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.45rem;">
+            <span class="card-section-label" style="margin: 0;">The Loops — Active Chained Pattern Slots &amp; Submix Levels</span>
+            <span id="stage-sync-mode-pill" class="badge-mono" style="color: var(--color-drums); cursor: pointer;" title="Click to configure Time Signature &amp; Polyrhythm Sync Mode in System Settings">Sync: Independent Polymetric</span>
+          </div>
+          <div id="stage-sync-banner" class="stage-sync-banner" style="display: none;"></div>
           <div id="stage-tracks-container" class="tracks-column"></div>
         </div>
 
@@ -146,7 +158,7 @@
         <aside class="pattern-palette-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span class="card-section-label" style="margin: 0;">Pattern Palette</span>
-            <span style="font-size: 0.7rem; color: var(--color-text-dim);">Drag or Click</span>
+            <span style="font-size: 0.7rem; color: var(--color-text-dim);">Click Assign • Dbl-Click Edit</span>
           </div>
 
           <div id="palette-filter-chips" class="filter-chips-row">
@@ -183,6 +195,9 @@
           </div>
 
           <div class="patterns-toolbar-right">
+            <input type="file" id="workspace-file-input" accept=".json,application/json" style="display: none;">
+            <button id="btn-export-workspace" class="btn" title="Export all Patterns, Snapshots &amp; Stage Setups to a portable .json file">⬇ EXPORT (.json)</button>
+            <button id="btn-import-workspace" class="btn" title="Import Patterns, Snapshots &amp; Stage Setups from a .json file">⬆ IMPORT (.json)</button>
             <button id="btn-new-pattern" class="btn btn-green">+ NEW PATTERN</button>
             <button class="btn btn-gold btn-open-chords-dict">CHORDS DICTIONARY</button>
           </div>
@@ -206,12 +221,23 @@
           </div>
 
           <div class="ctrl-field">
-            <span class="card-section-label">Time Signature</span>
-            <select id="drum-ed-timesig">
-              <option value="4/4">4/4</option>
-              <option value="7/8">7/8</option>
-              <option value="5/4">5/4</option>
-            </select>
+            <span class="card-section-label">Time Sig (1–21 / 4|8)</span>
+            <div class="timesig-split-box">
+              <select id="drum-ed-ts-num" title="Time Signature Upper Value (1 to 21 beats)">
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4" selected>4</option><option value="5">5</option><option value="6">6</option>
+                <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                <option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                <option value="16">16</option><option value="17">17</option><option value="18">18</option>
+                <option value="19">19</option><option value="20">20</option><option value="21">21</option>
+              </select>
+              <span class="timesig-slash">/</span>
+              <select id="drum-ed-ts-den" title="Time Signature Lower Value (4 = Quarter, 8 = Eighth)">
+                <option value="4" selected>4</option>
+                <option value="8">8</option>
+              </select>
+            </div>
           </div>
 
           <div class="ctrl-field">
@@ -220,6 +246,25 @@
               <input type="checkbox" id="drum-ed-sync" checked>
               <span>Sync with Master</span>
             </label>
+          </div>
+
+          <div class="ctrl-field" id="drum-ed-bpm-wrap" style="display: none;">
+            <span class="card-section-label">Tempo (BPM)</span>
+            <input type="number" id="drum-ed-bpm" min="40" max="280" step="0.5" value="120" style="width: 90px;">
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Tempo Ratio</span>
+            <select id="drum-ed-ratio" title="Polyrhythmic / Metric Ratio relative to Master Tempo (e.g. 3:2 Triplet or 3:4 Bar-Fit)">
+              <option value="1:1" selected>1:1 (1.0× Std)</option>
+              <option value="3:2">3:2 (1.5× Triplet 6/8→4/4)</option>
+              <option value="3:4">3:4 (0.75× Bar-Fit 6/8→4/4)</option>
+              <option value="4:3">4:3 (1.33× Cross 4:3)</option>
+              <option value="1:2">1:2 (0.5× Half-Time)</option>
+              <option value="2:1">2:1 (2.0× Double-Time)</option>
+              <option value="5:4">5:4 (1.25× Quintuplet)</option>
+              <option value="7:4">7:4 (1.75× Septuplet)</option>
+            </select>
           </div>
 
           <div class="ctrl-field">
@@ -234,15 +279,31 @@
           <div class="ctrl-field">
             <span class="card-section-label">Step Resolution</span>
             <select id="drum-ed-res">
-              <option value="1/8">1/8</option>
-              <option value="1/16" selected>1/16</option>
-              <option value="1/32">1/32</option>
+              <option value="1/8">1/8 (Eighth)</option>
+              <option value="1/8T">1/8T (Ternary Triplet)</option>
+              <option value="1/16" selected>1/16 (Sixteenth)</option>
+              <option value="1/32">1/32 (Thirty-Second)</option>
             </select>
           </div>
 
           <div class="ctrl-field">
-            <span class="card-section-label">Rhythm Tension (<span id="drum-ed-tension-val">35%</span>)</span>
-            <input type="range" id="drum-ed-tension" min="0" max="100" value="35" style="width: 120px;">
+            <span class="card-section-label">Beat Sep (1–9)</span>
+            <select id="drum-ed-beatsep" title="Position of vertical amber beat separators (visual grouping every N slots)">
+              <option value="1">Every 1</option>
+              <option value="2">Every 2</option>
+              <option value="3">Every 3</option>
+              <option value="4" selected>Every 4</option>
+              <option value="5">Every 5</option>
+              <option value="6">Every 6</option>
+              <option value="7">Every 7</option>
+              <option value="8">Every 8</option>
+              <option value="9">Every 9</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Grid Slots</span>
+            <span id="drum-ed-slot-summary" class="badge-mono" style="height: 30px; display: inline-flex; align-items: center; color: var(--color-drums);">16 / Bar • 16 Total</span>
           </div>
 
           <div class="ctrl-field" style="margin-left: auto;">
@@ -251,8 +312,8 @@
           </div>
         </div>
 
-        <div style="font-size: 0.76rem; color: var(--color-text-dim);">
-          4-State Step Cycle: <strong style="color: #888;">Off</strong> → <strong style="color: var(--color-drums);">Hit</strong> → <strong style="color: #fff;">Accent (Glow)</strong> → <strong style="color: var(--color-chords);">Ghost Note (Amber Outline)</strong>
+        <div id="drum-ed-velocity-legend" style="font-size: 0.76rem; color: var(--color-text-dim);">
+          4-State Step Cycle: <strong style="color: #888;">Off</strong> → <strong style="color: var(--color-drums);">Normal Hit (Vel <span id="lbl-vel-normal">90</span>)</strong> → <strong style="color: #fff;">Hi / Accent (Vel <span id="lbl-vel-accent">127</span>)</strong> → <strong style="color: var(--color-chords);">Ghost Note (Vel <span id="lbl-vel-ghost">25</span>)</strong> • <strong style="color: var(--color-chords);">Amber Vertical Bars</strong> = Beat Separators (adjustable Every 1–9)
         </div>
 
         <div id="drum-matrix-container" class="drum-matrix-container"></div>
@@ -273,12 +334,23 @@
           </div>
 
           <div class="ctrl-field">
-            <span class="card-section-label">Time Signature</span>
-            <select id="bass-ed-timesig">
-              <option value="4/4">4/4</option>
-              <option value="7/8">7/8</option>
-              <option value="5/4">5/4</option>
-            </select>
+            <span class="card-section-label">Time Sig (1–21 / 4|8)</span>
+            <div class="timesig-split-box">
+              <select id="bass-ed-ts-num" title="Time Signature Upper Value (1 to 21 beats)">
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4" selected>4</option><option value="5">5</option><option value="6">6</option>
+                <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                <option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                <option value="16">16</option><option value="17">17</option><option value="18">18</option>
+                <option value="19">19</option><option value="20">20</option><option value="21">21</option>
+              </select>
+              <span class="timesig-slash">/</span>
+              <select id="bass-ed-ts-den" title="Time Signature Lower Value (4 = Quarter, 8 = Eighth)">
+                <option value="4" selected>4</option>
+                <option value="8">8</option>
+              </select>
+            </div>
           </div>
 
           <div class="ctrl-field">
@@ -289,12 +361,48 @@
             </label>
           </div>
 
+          <div class="ctrl-field" id="bass-ed-bpm-wrap" style="display: none;">
+            <span class="card-section-label">Tempo (BPM)</span>
+            <input type="number" id="bass-ed-bpm" min="40" max="280" step="0.5" value="120" style="width: 90px;">
+          </div>
+
           <div class="ctrl-field">
-            <span class="card-section-label">Resolution</span>
+            <span class="card-section-label">Bars (1–4)</span>
+            <div class="stepper">
+              <button id="bass-bars-dec" class="stepper-btn">−</button>
+              <span id="bass-ed-bars" class="stepper-val">1</span>
+              <button id="bass-bars-inc" class="stepper-btn">+</button>
+            </div>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Step Resolution</span>
             <select id="bass-ed-res">
-              <option value="1/8">1/8</option>
-              <option value="1/16" selected>1/16 (16 Steps)</option>
+              <option value="1/8">1/8 (Eighth)</option>
+              <option value="1/8T">1/8T (Ternary Triplet)</option>
+              <option value="1/16" selected>1/16 (Sixteenth)</option>
+              <option value="1/32">1/32 (Thirty-Second)</option>
             </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Beat Sep (1–9)</span>
+            <select id="bass-ed-beatsep" title="Position of vertical amber beat separators (visual grouping every N slots)">
+              <option value="1">Every 1</option>
+              <option value="2">Every 2</option>
+              <option value="3">Every 3</option>
+              <option value="4" selected>Every 4</option>
+              <option value="5">Every 5</option>
+              <option value="6">Every 6</option>
+              <option value="7">Every 7</option>
+              <option value="8">Every 8</option>
+              <option value="9">Every 9</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Grid Slots</span>
+            <span id="bass-ed-slot-summary" class="badge-mono" style="height: 30px; display: inline-flex; align-items: center; color: var(--color-bass);">12 / Bar • 12 Total</span>
           </div>
 
           <div class="ctrl-field">
@@ -342,12 +450,23 @@
           </div>
 
           <div class="ctrl-field">
-            <span class="card-section-label">Time Signature</span>
-            <select id="chord-ed-timesig">
-              <option value="4/4">4/4</option>
-              <option value="3/4">3/4</option>
-              <option value="6/8">6/8</option>
-            </select>
+            <span class="card-section-label">Time Sig (1–21 / 4|8)</span>
+            <div class="timesig-split-box">
+              <select id="chord-ed-ts-num" title="Time Signature Upper Value (1 to 21 beats)">
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4" selected>4</option><option value="5">5</option><option value="6">6</option>
+                <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                <option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                <option value="16">16</option><option value="17">17</option><option value="18">18</option>
+                <option value="19">19</option><option value="20">20</option><option value="21">21</option>
+              </select>
+              <span class="timesig-slash">/</span>
+              <select id="chord-ed-ts-den" title="Time Signature Lower Value (4 = Quarter, 8 = Eighth)">
+                <option value="4" selected>4</option>
+                <option value="8">8</option>
+              </select>
+            </div>
           </div>
 
           <div class="ctrl-field">
@@ -358,22 +477,42 @@
             </label>
           </div>
 
+          <div class="ctrl-field" id="chord-ed-bpm-wrap" style="display: none;">
+            <span class="card-section-label">Tempo (BPM)</span>
+            <input type="number" id="chord-ed-bpm" min="40" max="280" step="0.5" value="120" style="width: 90px;">
+          </div>
+
           <div class="ctrl-field">
-            <span class="card-section-label">Harmonic Resolution</span>
-            <div class="mode-toggle-group">
-              <button class="mode-toggle-btn chord-res-btn" data-res="1/1">1/1 Bar</button>
-              <button class="mode-toggle-btn chord-res-btn active" data-res="1/2">1/2 Bar</button>
-              <button class="mode-toggle-btn chord-res-btn" data-res="1/4">1/4 Beat</button>
+            <span class="card-section-label">Bars (1–8)</span>
+            <div class="stepper">
+              <button id="chord-bars-dec" class="stepper-btn">−</button>
+              <span id="chord-ed-bars" class="stepper-val">4</span>
+              <button id="chord-bars-inc" class="stepper-btn">+</button>
             </div>
           </div>
 
           <div class="ctrl-field">
             <span class="card-section-label">Voicing Style</span>
-            <select id="chord-ed-voicing">
-              <option value="Jazz Drop-2">Jazz Drop-2</option>
-              <option value="Pop Triads">Pop Triads</option>
-              <option value="Quartal Open">Quartal Open</option>
-              <option value="Lush Pad">Lush Pad</option>
+            <select id="chord-ed-voicing" title="Select keyboard voicing spread (Drop-2, Pop Triads, Quartal, or Lush Pad)">
+              <option value="Jazz Drop-2">Jazz Drop-2 (Open)</option>
+              <option value="Pop Triads">Pop Triads (Close)</option>
+              <option value="Quartal Open">Quartal Open (4ths)</option>
+              <option value="Lush Pad">Lush Pad (2-Hand Wide)</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
+            <span class="card-section-label">Octave (-4 to +4)</span>
+            <select id="chord-ed-octave" title="Shift chord pattern octave (-4 to +4 octaves)">
+              <option value="-4">-4 Oct</option>
+              <option value="-3">-3 Oct</option>
+              <option value="-2">-2 Oct</option>
+              <option value="-1">-1 Oct</option>
+              <option value="0" selected>0 (Std C4)</option>
+              <option value="1">+1 Oct</option>
+              <option value="2">+2 Oct</option>
+              <option value="3">+3 Oct</option>
+              <option value="4">+4 Oct</option>
             </select>
           </div>
 
@@ -381,16 +520,11 @@
             <span class="card-section-label">SoundFont Preset (Ch 3)</span>
             <select id="chord-ed-preset">
               <option value="0">Ch 3: Acoustic Piano</option>
-              <option value="4">Ch 3: Rhodes EP</option>
-              <option value="5">Ch 3: DX EP</option>
+              <option value="4" selected>Ch 3: Rhodes EP 1</option>
+              <option value="5">Ch 3: DX EP 2</option>
               <option value="11">Ch 3: Vibraphone</option>
               <option value="89">Ch 3: Warm Synth Pad</option>
             </select>
-          </div>
-
-          <div class="ctrl-field">
-            <span class="card-section-label">Harmonic Tension (<span id="chord-ed-tension-val">25%</span>)</span>
-            <input type="range" id="chord-ed-tension" min="0" max="100" value="25" style="width: 110px; accent-color: var(--color-chords);">
           </div>
 
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
@@ -410,32 +544,19 @@
     <section id="view-settings" class="view-container">
       <div class="settings-cards-grid">
 
-        <!-- Card 1: MIDI Routing & Ports -->
+        <!-- MIDI Routing & Hardware Ports (with macOS IAC / Internal .sf2 Fallback Chooser) -->
         <div class="hw-card">
           <div class="settings-card-header">
-            <h3 class="settings-card-title">Card 1: MIDI Routing & Hardware Ports</h3>
-            <span class="badge-mono">Web MIDI API</span>
+            <h3 class="settings-card-title">MIDI Routing &amp; Hardware Ports</h3>
+            <span class="badge-mono">Web MIDI / .sf2 Chooser</span>
           </div>
-          <div id="sys-content">
-            <div class="routing-row">
-              <span><strong style="color: var(--color-drums);">RHYTHM</strong> (Channel 10 — Akai MPX8 / Drums)</span>
-              <span class="route-badge fallback">Internal SoundFont</span>
-            </div>
-            <div class="routing-row">
-              <span><strong style="color: var(--color-bass);">BASS</strong> (Channel 2 — Roland TB-3 / Bass)</span>
-              <span class="route-badge fallback">Internal SoundFont</span>
-            </div>
-            <div class="routing-row">
-              <span><strong style="color: var(--color-chords);">CHORDS</strong> (Channel 3 — Virtual Loopback / Keys)</span>
-              <span class="route-badge fallback">Internal SoundFont</span>
-            </div>
-          </div>
+          <div id="sys-content"></div>
         </div>
 
-        <!-- Card 2: SoundFont2 Engine (FluidR3_GM.sf2) -->
+        <!-- SoundFont2 Engine (FluidR3_GM.sf2) -->
         <div class="hw-card">
           <div class="settings-card-header">
-            <h3 class="settings-card-title">Card 2: SoundFont2 Engine (FluidR3_GM.sf2)</h3>
+            <h3 class="settings-card-title">SoundFont2 Engine (FluidR3_GM.sf2)</h3>
             <span id="sf-status-badge" class="route-badge fallback">IndexedDB: Checking...</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--color-text-dim); margin-top: 0;">
@@ -448,10 +569,10 @@
           </div>
         </div>
 
-        <!-- Card 3: Audio & Limiter Settings -->
+        <!-- Audio & Limiter Settings -->
         <div class="hw-card">
           <div class="settings-card-header">
-            <h3 class="settings-card-title">Card 3: Audio & Brickwall Limiter Settings</h3>
+            <h3 class="settings-card-title">Audio &amp; Brickwall Limiter Settings</h3>
             <span class="badge-mono">128 samples / 2.9 ms</span>
           </div>
           <div class="routing-row">
@@ -463,19 +584,19 @@
             <input type="range" id="slider-limiter-thresh" min="-18" max="0" step="0.5" value="-3">
           </div>
           <div class="routing-row">
-            <span>Brickwall Ratio & Safety Release</span>
+            <span>Brickwall Ratio &amp; Safety Release</span>
             <span class="badge-mono">12:1 • Attack 3 ms / Release 150 ms</span>
           </div>
         </div>
 
-        <!-- Card 4: UI Preferences -->
+        <!-- UI Preferences & Portable Workspace Backup -->
         <div class="hw-card">
           <div class="settings-card-header">
-            <h3 class="settings-card-title">Card 4: UI & Stage Preferences</h3>
-            <span class="badge-mono">Display</span>
+            <h3 class="settings-card-title">UI Preferences &amp; Project Backup</h3>
+            <span class="badge-mono">Display &amp; JSON</span>
           </div>
           <div class="routing-row">
-            <span>Show Chords Displayer ("Now & Next") on Main Stage</span>
+            <span>Show Chords Displayer ("Now &amp; Next") on Main Stage</span>
             <label class="checkbox-pill">
               <input type="checkbox" id="pref-show-chords" checked>
               <span>Visible</span>
@@ -488,6 +609,74 @@
               <span>High Contrast</span>
             </label>
           </div>
+          <div class="routing-row" style="margin-top: 0.35rem; padding-top: 0.55rem; border-top: 1px solid var(--border-subtle);">
+            <div>
+              <strong style="color: var(--color-chords);">Portable Project Backup (.json)</strong>
+              <div style="font-size: 0.72rem; color: var(--color-text-dim);">Auto-saved in browser LocalStorage • Export/Import across machines</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.45rem;">
+              <button id="btn-settings-export-json" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;">⬇ Export .json</button>
+              <button id="btn-settings-import-json" class="btn btn-green" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;">⬆ Import .json</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Drum Pattern MIDI Velocity Levels (Hi/Accent, Normal, Ghost) -->
+        <div class="hw-card" style="grid-column: 1 / -1;">
+          <div class="settings-card-header">
+            <div>
+              <h3 class="settings-card-title" style="color: var(--color-drums);">Drum Pattern Hit Velocity Levels (MIDI 1–127)</h3>
+              <span style="font-size: 0.78rem; color: var(--color-text-dim);">Configure the MIDI velocity values sent for the 3 active hit states in the Drum Pattern Editor (Hi / Accent, Normal Hit, and Ghost Note).</span>
+            </div>
+            <button id="btn-reset-drum-velocities" class="btn">Reset Velocity Defaults</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; margin-top: 0.25rem;">
+            <div class="routing-row" style="background: rgba(255, 255, 255, 0.03); padding: 0.6rem 0.75rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: #ffffff;">Value for Hi / Accent</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">State 2 (White-bordered glow cell) • Default: 127</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.45rem;">
+                <input type="number" id="vel-drum-accent" min="1" max="127" step="1" value="127" style="width: 72px;">
+                <button class="btn btn-test-drum-vel" data-vel-type="accent" style="padding: 0.28rem 0.55rem; font-size: 0.72rem;" title="Audition Hi / Accent velocity on Snare">▶</button>
+              </div>
+            </div>
+
+            <div class="routing-row" style="background: rgba(0, 255, 136, 0.04); padding: 0.6rem 0.75rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: var(--color-drums);">Value for Normal Hit</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">State 1 (Solid green cell) • Default: 90</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.45rem;">
+                <input type="number" id="vel-drum-normal" min="1" max="127" step="1" value="90" style="width: 72px;">
+                <button class="btn btn-test-drum-vel" data-vel-type="normal" style="padding: 0.28rem 0.55rem; font-size: 0.72rem;" title="Audition Normal Hit velocity on Snare">▶</button>
+              </div>
+            </div>
+
+            <div class="routing-row" style="background: rgba(255, 170, 0, 0.04); padding: 0.6rem 0.75rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: var(--color-chords);">Value for Ghost Hit</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">State 3 (Hollow/dim dot cell) • Default: 25</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.45rem;">
+                <input type="number" id="vel-drum-ghost" min="1" max="127" step="1" value="25" style="width: 72px;">
+                <button class="btn btn-test-drum-vel" data-vel-type="ghost" style="padding: 0.28rem 0.55rem; font-size: 0.72rem;" title="Audition Ghost Hit velocity on Snare">▶</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10-Slot Rhythm Instrument Mapper (Full-Width Card, Saved in Snapshots) -->
+        <div class="hw-card" style="grid-column: 1 / -1;">
+          <div class="settings-card-header">
+            <div>
+              <h3 class="settings-card-title" style="color: var(--color-drums);">Drum Editor 10-Slot GM Instrument Mapping</h3>
+              <span style="font-size: 0.78rem; color: var(--color-text-dim);">Select which General MIDI drum/percussion sound is used in each of the 10 Drum Editor rows (BD, SD, CH, OH, LT, HT, Ride/Crash Cymbals, GM Percs). Automatically saved &amp; recalled with Stage Snapshots.</span>
+            </div>
+            <button id="btn-reset-drum-map" class="btn">Reset GM Defaults</button>
+          </div>
+          <div id="drum-slot-mapper-grid" class="drum-slot-mapper-grid"></div>
         </div>
 
       </div>
@@ -517,7 +706,7 @@
   <div id="modal-chords-dict" class="modal-backdrop">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3 class="modal-title">CHORDS DICTIONARY & MODAL INTERCHANGE MATRIX</h3>
+        <h3 class="modal-title">CHORDS DICTIONARY &amp; MODAL INTERCHANGE MATRIX</h3>
         <button class="btn" data-close-modal="modal-chords-dict">✕</button>
       </div>
       <div class="modal-body">
@@ -666,13 +855,32 @@
     </div>
   </div>
 
+  <!-- Modal 4: Snapshot Overwrite Confirmation -->
+  <div id="modal-overwrite-snapshot" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--color-chords);">OVERWRITE EXISTING SNAPSHOT?</h3>
+        <button class="btn" data-close-modal="modal-overwrite-snapshot">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="overwrite-snapshot-message" style="margin-top: 0; font-size: 0.9rem;">
+          This snapshot already exists. Do you want to overwrite it with your current stage settings?
+        </p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 1.25rem;">
+          <button class="btn" data-close-modal="modal-overwrite-snapshot">CANCEL</button>
+          <button id="btn-confirm-overwrite-snapshot" class="btn btn-gold">OVERWRITE SNAPSHOT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ========================================================================
        APPLICATION BOOTSTRAP SCRIPT
        ======================================================================== -->
   <script type="module">
-    import { TimingEngine } from './TimingEngine.js';
-    import { MidiBridge } from './MidiBridge.js';
-    import { SoundFontManager } from './SoundFontManager.js';
+    import { TimingEngine } from './src/TimingEngine.js';
+    import { MidiBridge } from './src/MidiBridge.js';
+    import { SoundFontManager } from './src/SoundFontManager.js';
     import { AppUI } from './src/AppUI.js';
 
     const engine = new TimingEngine();
@@ -682,39 +890,6 @@
     let isInitialized = false;
     let initPromise = null;
     let appUI = null;
-
-    function renderSystemMidiRouting(diag) {
-      const container = document.getElementById('sys-content');
-      if (!container) return;
-
-      const colorMap = {
-        rhythm: 'var(--color-drums)',
-        bass: 'var(--color-bass)',
-        chords: 'var(--color-chords)'
-      };
-
-      let html = '';
-      ['rhythm', 'bass', 'chords'].forEach(mod => {
-        const d = diag[mod];
-        const badgeClass = d.isFallback ? 'fallback' : 'bound';
-        const badgeText = d.isFallback ? 'Fallback (SoundFont)' : 'Hardware / Virtual';
-        html += `
-          <div class="routing-row">
-            <span>
-              <strong style="color: ${colorMap[mod]}; text-transform: uppercase;">${mod}</strong>
-              — ${d.portName} <em>(Ch ${d.channel})</em>
-            </span>
-            <span class="route-badge ${badgeClass}">${badgeText}</span>
-          </div>
-        `;
-      });
-
-      html += `<div style="margin-top: 0.75rem; font-size: 0.78rem; color: var(--color-text-dim);">
-        <strong>Detected MIDI Outputs:</strong> ${diag.allPorts.map(p => p.name).join(' • ')}
-      </div>`;
-
-      container.innerHTML = html;
-    }
 
     async function ensureSystemInitialized() {
       if (isInitialized) return;
@@ -733,8 +908,8 @@
         await soundFontManager.init();
 
         midiBridge.onPortsChanged = (diagnostics) => {
-          renderSystemMidiRouting(diagnostics);
           if (appUI) {
+            appUI.renderSystemMidiRouting(diagnostics);
             appUI.log('[MIDI] Routing matrix updated.');
           }
         };

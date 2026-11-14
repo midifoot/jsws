@@ -1,16 +1,19 @@
-const CACHE_NAME = 'autoband-core-v4';
+const CACHE_NAME = 'autoband-core-v13';
 
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './styles/ui-main.css',
+  './src/defaults.js',
+  './src/TimingEngine.js',
+  './src/MidiBridge.js',
+  './src/SoundFontManager.js',
+  './src/AppEditors.js',
+  './src/AppSettingsModals.js',
   './src/AppUI.js',
   './icons/icon-192.png',
-  './icons/icon-512.png',
-  './TimingEngine.js',
-  './MidiBridge.js',
-  './SoundFontManager.js'
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

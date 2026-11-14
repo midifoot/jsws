@@ -1,29 +1,42 @@
+import { AppEditorsMixin } from './AppEditors.js';
+import { AppSettingsModalsMixin } from './AppSettingsModals.js';
 /**
  * src/AppUI.js - AutoBand Front-End UI/UX Controller
  * Manages tab navigation, Main Stage loops/palette/snapshots, Unified Pattern Library,
- * Drum/Bass/Chord specialized editors, modals, and real-time TimingEngine/MidiBridge/SoundFont wiring.
+ * Drum/Bass/Chord specialized editors, 10-slot GM Drum Mapper, MIDI/SF2 routing chooser,
+ * modals, and real-time TimingEngine/MidiBridge/SoundFont wiring.
  */
 
-const DRUM_INSTRUMENTS = [
-  { code: 'BD',     label: 'Bass Drum',   pitch: 36 },
-  { code: 'SD',     label: 'Snare',       pitch: 38 },
-  { code: 'CH',     label: 'Closed Hat',  pitch: 42 },
-  { code: 'OH',     label: 'Open Hat',    pitch: 46 },
-  { code: 'LT',     label: 'Low Tom',     pitch: 45 },
-  { code: 'HT',     label: 'High Tom',    pitch: 50 },
-  { code: 'CYM',    label: 'Cymbal',      pitch: 49 },
-  { code: 'PERC 1', label: 'Clap / Rim',  pitch: 39 },
-  { code: 'PERC 2', label: 'Shaker',      pitch: 70 },
-  { code: 'MISC',   label: 'Cowbell',     pitch: 56 }
-];
+import {
+  DEFAULT_GM_PRESETS,
+  GM_PRESET_OPTIONS,
+  DEFAULT_DRUM_VELOCITIES,
+  DEFAULT_DRUM_SLOTS,
+  GM_DRUM_CATALOG,
+  STEP_RESOLUTIONS,
+  getDefaultBeatSeparator,
+  createDefaultPatterns,
+  DEFAULT_TRACK_SLOTS,
+  createDefaultSnapshots
+} from './defaults.js';
 
-const STRICT_PITCHES = ['E1', 'F1', 'G1', 'A1', 'B1', 'C2', 'D2', 'E2', 'G2'];
-const HARMONIC_DEGREES = ['R', '2', 'b3', '3', '4', '5', '6', 'b7', 'R8'];
+const STRICT_PITCHES = [
+  'C1', 'C#1', 'D1', 'Eb1', 'E1', 'F1', 'F#1', 'G1', 'Ab1', 'A1', 'Bb1', 'B1',
+  'C2', 'C#2', 'D2', 'Eb2', 'E2', 'F2', 'F#2', 'G2', 'Ab2', 'A2', 'Bb2', 'B2',
+  'C3', 'C#3', 'D3', 'Eb3', 'E3', 'F3', 'F#3', 'G3'
+];
+const HARMONIC_DEGREES = [
+  '-5', '-b6', '-6', '-b7', '-7',
+  'R', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7', 'R8'
+];
 const PITCH_TO_MIDI = {
-  E1: 28, F1: 29, G1: 31, A1: 33, B1: 35, C2: 36, D2: 38, E2: 40, G2: 43
+  C1: 24, 'C#1': 25, Db1: 25, D1: 26, 'D#1': 27, Eb1: 27, E1: 28, F1: 29, 'F#1': 30, Gb1: 30, G1: 31, 'G#1': 32, Ab1: 32, A1: 33, 'A#1': 34, Bb1: 34, B1: 35,
+  C2: 36, 'C#2': 37, Db2: 37, D2: 38, 'D#2': 39, Eb2: 39, E2: 40, F2: 41, 'F#2': 42, Gb2: 42, G2: 43, 'G#2': 44, Ab2: 44, A2: 45, 'A#2': 46, Bb2: 46, B2: 47,
+  C3: 48, 'C#3': 49, Db3: 49, D3: 50, 'D#3': 51, Eb3: 51, E3: 52, F3: 53, 'F#3': 54, Gb3: 54, G3: 55
 };
 const DEGREE_TO_OFFSET = {
-  R: 0, '2': 2, b3: 3, '3': 4, '4': 5, '5': 7, '6': 9, b7: 10, R8: 12
+  '-5': -5, '-b6': -4, '-6': -3, '-b7': -2, '-7': -1,
+  R: 0, b2: 1, '2': 2, b3: 3, '3': 4, '4': 5, b5: 6, '5': 7, b6: 8, '6': 9, b7: 10, '7': 11, R8: 12
 };
 
 const ROOT_TO_MIDI = {
@@ -38,8 +51,14 @@ export class AppUI {
     this.soundFontManager = soundFontManager;
     this.ensureSystemInitialized = ensureSystemInitialized;
 
-    // Pattern Library State
-    this.patterns = this.createInitialPatterns();
+    // 10-Slot Rhythm Instrument Assignment (Initialized from src/defaults.js & Saved in Snapshots)
+    this.drumSlots = DEFAULT_DRUM_SLOTS.map(s => ({ ...s }));
+
+    // Drum Pattern Step Velocities (MIDI 1-127, configurable in System Settings)
+    this.drumVelocities = { ...DEFAULT_DRUM_VELOCITIES };
+
+    // Pattern Library State (Initialized from src/defaults.js)
+    this.patterns = createDefaultPatterns();
     this.paletteFilter = 'all';
     this.paletteSearch = '';
     this.libraryFilter = 'all';
@@ -55,12 +74,7 @@ export class AppUI {
         muted: false,
         solo: false,
         selectedSlot: 0,
-        slots: [
-          { patternId: 'D-01', tension: 0 },
-          { patternId: 'D-01', tension: 1 },
-          { patternId: 'D-02', tension: 2 },
-          { patternId: 'D-03', tension: 0 }
-        ]
+        slots: DEFAULT_TRACK_SLOTS.drums.map(s => ({ ...s }))
       },
       bass: {
         id: 'bass',
@@ -70,10 +84,7 @@ export class AppUI {
         muted: false,
         solo: false,
         selectedSlot: 0,
-        slots: [
-          { patternId: 'B-01', tension: 0 },
-          { patternId: 'B-02', tension: 1 }
-        ]
+        slots: DEFAULT_TRACK_SLOTS.bass.map(s => ({ ...s }))
       },
       chords: {
         id: 'chords',
@@ -83,52 +94,17 @@ export class AppUI {
         muted: false,
         solo: false,
         selectedSlot: 0,
-        slots: [
-          { patternId: 'C-01', tension: 0 },
-          { patternId: 'C-02', tension: 1 },
-          { patternId: 'C-03', tension: 0 }
-        ]
+        slots: DEFAULT_TRACK_SLOTS.chords.map(s => ({ ...s }))
       }
     };
 
-    // Pre-populated Snapshots
-    this.snapshots = {
-      'Snapshot 1 (Default)': this.captureSnapshotState(120),
-      'Verse Groove': {
-        tempo: 112,
-        tracks: {
-          drums: [{ patternId: 'D-01', tension: 0 }, { patternId: 'D-01', tension: 0 }],
-          bass: [{ patternId: 'B-01', tension: 0 }, { patternId: 'B-01', tension: 1 }],
-          chords: [{ patternId: 'C-01', tension: 0 }, { patternId: 'C-02', tension: 0 }]
-        }
-      },
-      'Chorus Lift': {
-        tempo: 126,
-        tracks: {
-          drums: [
-            { patternId: 'D-02', tension: 2 },
-            { patternId: 'D-02', tension: 3 },
-            { patternId: 'D-01', tension: 2 },
-            { patternId: 'D-03', tension: 4 }
-          ],
-          bass: [
-            { patternId: 'B-02', tension: 2 },
-            { patternId: 'B-03', tension: 3 },
-            { patternId: 'B-02', tension: 2 }
-          ],
-          chords: [
-            { patternId: 'C-03', tension: 2 },
-            { patternId: 'C-01', tension: 2 },
-            { patternId: 'C-02', tension: 3 },
-            { patternId: 'C-03', tension: 1 }
-          ]
-        }
-      }
-    };
+    // Pre-populated Snapshots (Initialized from src/defaults.js)
+    this.snapshots = createDefaultSnapshots();
 
-    // Active Editor State
+    // Active Editor & Modal State
     this.editingPatternId = null;
     this.pendingDeletePatternId = null;
+    this.pendingSnapshotName = null;
     this.soloTimer = null;
 
     // Active Playback Cursor
@@ -136,200 +112,120 @@ export class AppUI {
     this.activeBeatInBar = 0;
   }
 
-  createInitialPatterns() {
-    // Default 16-step drum matrix (10 rows x 16 steps)
-    const makeDrumGrid = (presetType = 'funk') => {
-      const grid = DRUM_INSTRUMENTS.map(() => new Array(16).fill(0));
-      if (presetType === 'funk') {
-        [0, 6, 8, 10].forEach(s => { grid[0][s] = 1; }); // BD
-        [4, 12].forEach(s => { grid[1][s] = 2; });       // SD Accent
-        [7, 9, 15].forEach(s => { grid[1][s] = 3; });    // SD Ghost
-        for (let s = 0; s < 16; s += 2) grid[2][s] = 1;  // CH
-        grid[3][14] = 1;                                 // OH
-      } else if (presetType === 'odd') {
-        [0, 3, 8, 11].forEach(s => { grid[0][s] = 1; });
-        [4, 12].forEach(s => { grid[1][s] = 2; });
-        for (let s = 0; s < 16; s++) grid[2][s] = s % 4 === 0 ? 2 : 1;
-        grid[7][6] = 3;
-      } else {
-        [0, 8].forEach(s => { grid[0][s] = 1; });
-        [4, 12].forEach(s => { grid[1][s] = 1; });
-        [0, 3, 4, 7, 8, 11, 12, 15].forEach(s => { grid[2][s] = 1; });
-        grid[6][0] = 2;
+  getGMDrumLabelByPitch(pitch) {
+    const num = parseInt(pitch, 10);
+    for (const grp of GM_DRUM_CATALOG) {
+      for (const item of grp.items) {
+        if (item.pitch === num) return item.label;
       }
-      return grid;
-    };
+    }
+    return `GM Note ${num}`;
+  }
 
-    const makeBassSteps = (mode = 'strict') => {
-      const notes = ['A1', 'A1', 'C2', 'D2', 'E2', 'E2', 'G2', 'E2', 'D2', 'D2', 'F1', 'G1', 'A1', 'C2', 'D2', 'E2'];
-      const degrees = ['R', 'R', 'b3', '4', '5', '5', 'b7', '5', 'R', 'b3', '4', '5', 'R', '5', 'b7', 'R8'];
-      return Array.from({ length: 16 }, (_, idx) => ({
-        pitch: notes[idx % notes.length],
-        degree: degrees[idx % degrees.length],
-        gate: idx % 4 === 0 ? 100 : (idx % 2 === 0 ? 50 : 25),
-        accent: idx % 4 === 0,
-        slide: idx === 7 || idx === 15,
-        rest: idx === 3 || idx === 11
-      }));
-    };
+  /**
+   * Resolve MIDI velocity (1-127) for a Drum Pattern step state:
+   * - state === 2: Hi / Accent (default 127)
+   * - state === 1: Normal Hit (default 90)
+   * - state === 3: Ghost Hit (default 25)
+   */
+  getDrumStepVelocity(state) {
+    if (state === 2) return this.drumVelocities.accent;
+    if (state === 1) return this.drumVelocities.normal;
+    if (state === 3) return this.drumVelocities.ghost;
+    return 0;
+  }
 
-    return [
-      {
-        id: 'D-01',
-        type: 'drums',
-        name: 'FunkBeat',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 1,
-        resolution: '1/16',
-        tension: 35,
-        preset: 0,
-        preview: [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1],
-        rowMutes: new Array(10).fill(false),
-        rowSolos: new Array(10).fill(false),
-        drumGrid: makeDrumGrid('funk')
-      },
-      {
-        id: 'D-02',
-        type: 'drums',
-        name: 'OddPocket',
-        timeSig: '7/8',
-        syncMaster: true,
-        bpm: 120,
-        bars: 2,
-        resolution: '1/16',
-        tension: 50,
-        preset: 16,
-        preview: [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0],
-        rowMutes: new Array(10).fill(false),
-        rowSolos: new Array(10).fill(false),
-        drumGrid: makeDrumGrid('odd')
-      },
-      {
-        id: 'D-03',
-        type: 'drums',
-        name: 'BrushSwing',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 1,
-        resolution: '1/16',
-        tension: 20,
-        preset: 40,
-        preview: [1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1],
-        rowMutes: new Array(10).fill(false),
-        rowSolos: new Array(10).fill(false),
-        drumGrid: makeDrumGrid('swing')
-      },
-      {
-        id: 'B-01',
-        type: 'bass',
-        name: 'Walking',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 1,
-        resolution: '1/16',
-        preset: 33,
-        mode: 'follower',
-        preview: [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1],
-        bassSteps: makeBassSteps('follower')
-      },
-      {
-        id: 'B-02',
-        type: 'bass',
-        name: 'SlapGroove',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 1,
-        resolution: '1/16',
-        preset: 36,
-        mode: 'strict',
-        preview: [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0],
-        bassSteps: makeBassSteps('strict')
-      },
-      {
-        id: 'B-03',
-        type: 'bass',
-        name: 'SynthPulse',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 2,
-        resolution: '1/16',
-        preset: 38,
-        mode: 'follower',
-        preview: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        bassSteps: makeBassSteps('follower')
-      },
-      {
-        id: 'C-01',
-        type: 'chords',
-        name: 'Drop2',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 4,
-        resolution: '1/2',
-        voicing: 'Jazz Drop-2',
-        preset: 0,
-        tension: 25,
-        preview: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-        measures: [
-          ['Am7', 'D7'],
-          ['Gmaj7', 'Cmaj7'],
-          ['F#m7b5', 'B7b9'],
-          ['Em7', 'A7#5']
-        ]
-      },
-      {
-        id: 'C-02',
-        type: 'chords',
-        name: 'DorianVamp',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 4,
-        resolution: '1/1',
-        voicing: 'Quartal Open',
-        preset: 4,
-        tension: 40,
-        preview: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-        measures: [
-          ['Dm7'],
-          ['G7'],
-          ['Dm7'],
-          ['Em7']
-        ]
-      },
-      {
-        id: 'C-03',
-        type: 'chords',
-        name: 'NeoSoul',
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 4,
-        resolution: '1/4',
-        voicing: 'Lush Pad',
-        preset: 89,
-        tension: 65,
-        preview: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-        measures: [
-          ['Fmaj7', 'Fmaj7', 'Em7', 'A7'],
-          ['Dm7', 'Dm7', 'G7', 'C7'],
-          ['Fmaj7', 'Em7', 'Dm7', 'Cmaj7'],
-          ['Bb7', 'Bb7', 'A7#5', 'A7']
-        ]
-      }
-    ];
+  updateDrumVelocityLegend() {
+    const elAccent = document.getElementById('lbl-vel-accent');
+    const elNormal = document.getElementById('lbl-vel-normal');
+    const elGhost = document.getElementById('lbl-vel-ghost');
+    if (elAccent) elAccent.textContent = String(this.drumVelocities.accent);
+    if (elNormal) elNormal.textContent = String(this.drumVelocities.normal);
+    if (elGhost) elGhost.textContent = String(this.drumVelocities.ghost);
+
+    const inpAccent = document.getElementById('vel-drum-accent');
+    const inpNormal = document.getElementById('vel-drum-normal');
+    const inpGhost = document.getElementById('vel-drum-ghost');
+    if (inpAccent) inpAccent.value = String(this.drumVelocities.accent);
+    if (inpNormal) inpNormal.value = String(this.drumVelocities.normal);
+    if (inpGhost) inpGhost.value = String(this.drumVelocities.ghost);
+  }
+
+  /**
+   * Parse "upper/lower" time signature into { upper: 1..21, lower: 4|8 }
+   */
+  parseTimeSig(timeSig = '4/4') {
+    const parts = (timeSig || '4/4').split('/');
+    const upper = Math.max(1, Math.min(21, parseInt(parts[0], 10) || 4));
+    const lower = parseInt(parts[1], 10) === 8 ? 8 : 4;
+    return { upper, lower };
+  }
+
+  /**
+   * Slots per Time-Signature beat unit (per /4 when lower=4, or per /8 when lower=8):
+   * - If lower = 4: 1/8 -> 2, 1/8T -> 3, 1/16 -> 4, 1/32 -> 8
+   * - If lower = 8: 1/8 -> 1, 1/8T -> 3, 1/16 -> 2, 1/32 -> 4
+   */
+  getStepsPerUnit(timeSig = '4/4', resolution = '1/16') {
+    const { lower } = this.parseTimeSig(timeSig);
+    const res = STEP_RESOLUTIONS[resolution] || STEP_RESOLUTIONS['1/16'];
+    return lower === 8 ? res.stepsPerEighth : res.stepsPerQuarter;
+  }
+
+  /**
+   * Slots per Quarter-Note pulse (TimingEngine pulse = 1/4 note):
+   * - 1/8  = 2 slots per quarter note (whether 4/4 or 7/8!)
+   * - 1/8T = 3 slots per quarter note in /4 (or 6 in /8)
+   * - 1/16 = 4 slots per quarter note
+   * - 1/32 = 8 slots per quarter note
+   */
+  getSlotsPerQuarter(timeSig = '4/4', resolution = '1/16') {
+    const { lower } = this.parseTimeSig(timeSig);
+    const res = STEP_RESOLUTIONS[resolution] || STEP_RESOLUTIONS['1/16'];
+    return lower === 8 ? (res.stepsPerEighth * 2) : res.stepsPerQuarter;
+  }
+
+  /**
+   * Exact number of slots in 1 Bar for any (upper/lower, resolution):
+   * Examples:
+   * - 7/8 @ 1/8  -> 7 * 1 = 7 slots/bar  (14 slots only if 2 bars or @ 1/16)
+   * - 6/8 @ 1/8  -> 6 * 1 = 6 slots/bar
+   * - 6/8 @ 1/16 -> 6 * 2 = 12 slots/bar
+   * - 4/4 @ 1/8T -> 4 * 3 = 12 slots/bar
+   * - 4/4 @ 1/16 -> 4 * 4 = 16 slots/bar
+   */
+  getStepsPerBar(timeSig = '4/4', resolution = '1/16') {
+    const { upper } = this.parseTimeSig(timeSig);
+    return upper * this.getStepsPerUnit(timeSig, resolution);
+  }
+
+  getTotalSteps(pat) {
+    if (!pat) return 16;
+    return this.getStepsPerBar(pat.timeSig || '4/4', pat.resolution || '1/16') * (pat.bars || 1);
+  }
+
+  getBeatSepForPattern(pat) {
+    if (!pat) return 4;
+    const val = parseInt(pat.beatSep, 10);
+    if (val >= 1 && val <= 9) return val;
+    return getDefaultBeatSeparator(pat.timeSig || '4/4', pat.resolution || '1/16');
+  }
+
+  /**
+   * Returns true if a chord slot string represents silence / rest / N.C.
+   * Empty string "", "O", "0", "-", "NC", "N.C.", "REST", "Ø" are all treated as silence.
+   */
+  isSilentChordSymbol(symbol) {
+    if (symbol === undefined || symbol === null) return true;
+    const clean = String(symbol).trim();
+    if (!clean) return true;
+    return /^(o|0|-|—|nc|n\.c\.|rest|silence|ø)$/i.test(clean);
   }
 
   captureSnapshotState(tempo = 120) {
     return {
       tempo,
+      drumSlots: this.drumSlots.map(s => ({ ...s })),
       tracks: {
         drums: this.tracks.drums.slots.map(s => ({ ...s })),
         bass: this.tracks.bass.slots.map(s => ({ ...s })),
@@ -338,7 +234,179 @@ export class AppUI {
     };
   }
 
+  // --- Workspace Persistence (LocalStorage + Portable .json Export/Import) ---
+  getWorkspaceStorageKey() {
+    return 'AutoBand_Workspace_v1';
+  }
+
+  serializeWorkspace() {
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      tempo: this.engine ? this.engine.tempo : 120,
+      drumVelocities: { ...this.drumVelocities },
+      drumSlots: this.drumSlots.map(s => ({ ...s })),
+      tracks: {
+        drums: {
+          muted: !!this.tracks.drums.muted,
+          solo: !!this.tracks.drums.solo,
+          selectedSlot: this.tracks.drums.selectedSlot || 0,
+          slots: this.tracks.drums.slots.map(s => ({ ...s }))
+        },
+        bass: {
+          muted: !!this.tracks.bass.muted,
+          solo: !!this.tracks.bass.solo,
+          selectedSlot: this.tracks.bass.selectedSlot || 0,
+          slots: this.tracks.bass.slots.map(s => ({ ...s }))
+        },
+        chords: {
+          muted: !!this.tracks.chords.muted,
+          solo: !!this.tracks.chords.solo,
+          selectedSlot: this.tracks.chords.selectedSlot || 0,
+          slots: this.tracks.chords.slots.map(s => ({ ...s }))
+        }
+      },
+      patterns: JSON.parse(JSON.stringify(this.patterns)),
+      snapshots: JSON.parse(JSON.stringify(this.snapshots))
+    };
+  }
+
+  applyWorkspaceData(data) {
+    if (!data || typeof data !== 'object') return false;
+
+    if (typeof data.tempo === 'number' && data.tempo >= 40 && data.tempo <= 300) {
+      if (this.engine && typeof this.engine.setTempo === 'function') {
+        this.engine.setTempo(data.tempo);
+      }
+      const bpmVal = document.getElementById('bpm-value');
+      const bpmSlider = document.getElementById('bpm-slider');
+      if (bpmVal) bpmVal.textContent = String(data.tempo);
+      if (bpmSlider) bpmSlider.value = String(data.tempo);
+    }
+
+    if (data.drumVelocities && typeof data.drumVelocities === 'object') {
+      this.drumVelocities = {
+        ...this.drumVelocities,
+        ...data.drumVelocities
+      };
+      this.updateDrumVelocityLegend();
+    }
+
+    if (Array.isArray(data.drumSlots) && data.drumSlots.length >= 8) {
+      this.drumSlots = data.drumSlots.map(s => ({ ...s }));
+    }
+
+    if (Array.isArray(data.patterns) && data.patterns.length > 0) {
+      this.patterns = JSON.parse(JSON.stringify(data.patterns));
+    }
+
+    if (data.tracks && typeof data.tracks === 'object') {
+      ['drums', 'bass', 'chords'].forEach(tk => {
+        const src = data.tracks[tk];
+        if (!src) return;
+        if (Array.isArray(src)) {
+          this.tracks[tk].slots = src.map(s => ({ ...s }));
+        } else if (Array.isArray(src.slots)) {
+          this.tracks[tk].slots = src.slots.map(s => ({ ...s }));
+          if (typeof src.muted === 'boolean') this.tracks[tk].muted = src.muted;
+          if (typeof src.solo === 'boolean') this.tracks[tk].solo = src.solo;
+          if (typeof src.selectedSlot === 'number') this.tracks[tk].selectedSlot = src.selectedSlot;
+        }
+      });
+    }
+
+    if (data.snapshots && typeof data.snapshots === 'object') {
+      this.snapshots = JSON.parse(JSON.stringify(data.snapshots));
+      this.syncSnapshotDropdown();
+    }
+
+    return true;
+  }
+
+  syncSnapshotDropdown() {
+    const snapSelect = document.getElementById('snapshot-select');
+    if (!snapSelect || !this.snapshots) return;
+    const currentVal = snapSelect.value;
+    snapSelect.innerHTML = '';
+    Object.keys(this.snapshots).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      snapSelect.appendChild(opt);
+    });
+    if (this.snapshots[currentVal]) {
+      snapSelect.value = currentVal;
+    }
+  }
+
+  saveWorkspaceToLocalStorage() {
+    try {
+      const payload = this.serializeWorkspace();
+      localStorage.setItem(this.getWorkspaceStorageKey(), JSON.stringify(payload));
+    } catch (err) {
+      console.warn('[Workspace] LocalStorage auto-save failed:', err);
+    }
+  }
+
+  loadWorkspaceFromLocalStorage() {
+    try {
+      const raw = localStorage.getItem(this.getWorkspaceStorageKey());
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      return this.applyWorkspaceData(parsed);
+    } catch (err) {
+      console.warn('[Workspace] LocalStorage restore failed:', err);
+      return false;
+    }
+  }
+
+  exportWorkspaceJson() {
+    const payload = this.serializeWorkspace();
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `autoband-project-${dateStamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.log(`[Project] ⬇ Exported workspace (${this.patterns.length} patterns, ${Object.keys(this.snapshots).length} snapshots) to autoband-project-${dateStamp}.json`);
+  }
+
+  importWorkspaceJson(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data || !Array.isArray(data.patterns)) {
+          this.log('[Project] ⚠️ Invalid project .json file (missing patterns array).');
+          return;
+        }
+        this.applyWorkspaceData(data);
+        this.saveWorkspaceToLocalStorage();
+        this.renderStageTracks();
+        this.renderPalette();
+        this.renderPatternLibrary();
+        this.renderDrumSlotMapper();
+        this.updateChordDisplay(0, 0);
+        if (this.editingPatternId && this.getPatternById(this.editingPatternId)) {
+          this.openEditorForPattern(this.editingPatternId);
+        }
+        this.log(`[Project] ⬆ Imported project "${file.name}" (${this.patterns.length} patterns, ${Object.keys(this.snapshots).length} snapshots).`);
+      } catch (err) {
+        this.log(`[Project] ⚠️ Failed to parse project JSON: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+  }
+
   init() {
+    const restored = this.loadWorkspaceFromLocalStorage();
+
     this.bindGlobalNavigation();
     this.bindLoggerFooter();
     this.bindTransportControls();
@@ -348,12 +416,27 @@ export class AppUI {
     this.bindSettingsControls();
     this.bindModals();
 
+    this.syncSnapshotDropdown();
     this.renderStageTracks();
     this.renderPalette();
     this.renderPatternLibrary();
+    this.renderDrumSlotMapper();
+    this.renderSystemMidiRouting({
+      rhythm: this.midiBridge.getRouteInfo('rhythm'),
+      bass: this.midiBridge.getRouteInfo('bass'),
+      chords: this.midiBridge.getRouteInfo('chords'),
+      forceInternalSf2: this.midiBridge.forceInternalSf2,
+      allPorts: [
+        { id: 'internal', name: '🔊 Internal .sf2 / Web Audio Synth' }
+      ]
+    });
     this.updateChordDisplay(0, 0);
 
-    this.log('[UI] AutoBand Front-End Workspace Ready. Click PLAY or press Spacebar.');
+    if (restored) {
+      this.log('[UI] AutoBand Workspace Restored from LocalStorage. Click PLAY or press Spacebar.');
+    } else {
+      this.log('[UI] AutoBand Front-End Workspace Ready. Click PLAY or press Spacebar.');
+    }
   }
 
   // --- Logger HUD ---
@@ -450,6 +533,7 @@ export class AppUI {
       bpmInput.value = clamped.toFixed(1);
       if (pillBpm) pillBpm.textContent = `${clamped.toFixed(1)} BPM`;
     };
+    this.setTempo = setTempo;
 
     bpmSlider.addEventListener('input', (e) => setTempo(e.target.value));
     bpmInput.addEventListener('change', (e) => setTempo(e.target.value));
@@ -463,7 +547,7 @@ export class AppUI {
         this.engine.start();
         btnPlay.textContent = '■ STOP';
         btnPlay.classList.add('is-playing');
-        this.log(`[TRANSPORT] Sequencer STARTED at ${ parseFloat(this.engine.tempo).toFixed(1) } BPM`);
+        this.log(`[TRANSPORT] Sequencer STARTED at ${parseFloat(this.engine.tempo).toFixed(1)} BPM`);
       } else {
         this.engine.stop();
         btnPlay.textContent = '▶ PLAY';
@@ -502,39 +586,47 @@ export class AppUI {
       }
     });
 
-    // Snapshot Manager
+    // Snapshot Manager (Save / Overwrite with confirmation modal / Recall on change)
     const snapshotInput = document.getElementById('snapshot-name-input');
     const btnSaveSnapshot = document.getElementById('btn-save-snapshot');
     const snapshotSelect = document.getElementById('snapshot-select');
 
-    btnSaveSnapshot.addEventListener('click', () => {
-      const rawName = snapshotInput.value.trim() || `Snapshot ${Object.keys(this.snapshots).length + 1}`;
-      this.snapshots[rawName] = this.captureSnapshotState(parseFloat(this.engine.tempo));
+    if (snapshotInput && snapshotSelect) {
+      snapshotInput.value = snapshotSelect.value;
+    }
 
-      let exists = false;
-      for (const opt of snapshotSelect.options) {
-        if (opt.value === rawName) {
-          exists = true;
-          break;
+    btnSaveSnapshot.addEventListener('click', () => {
+      const targetName = snapshotInput.value.trim() || snapshotSelect.value || 'Snapshot 1 (Default)';
+      if (this.snapshots[targetName]) {
+        // Existing snapshot name -> open Overwrite Confirmation Modal
+        this.pendingSnapshotName = targetName;
+        const msgEl = document.getElementById('overwrite-snapshot-message');
+        if (msgEl) {
+          msgEl.textContent = `Snapshot "${targetName}" already exists. Do you want to overwrite it with the current stage & drum-kit settings?`;
         }
+        document.getElementById('modal-overwrite-snapshot').classList.add('open');
+      } else {
+        this.commitSaveSnapshot(targetName, false);
       }
-      if (!exists) {
-        const opt = document.createElement('option');
-        opt.value = rawName;
-        opt.textContent = rawName;
-        snapshotSelect.appendChild(opt);
-      }
-      snapshotSelect.value = rawName;
-      snapshotInput.value = '';
-      this.log(`[SNAPSHOT] Saved "${rawName}"`);
     });
 
     snapshotSelect.addEventListener('change', (e) => {
       const snapName = e.target.value;
+      if (snapshotInput) snapshotInput.value = snapName;
       const snap = this.snapshots[snapName];
       if (!snap) return;
 
       setTempo(snap.tempo || 120);
+      if (snap.drumSlots && snap.drumSlots.length === 10) {
+        this.drumSlots = snap.drumSlots.map(s => ({ ...s }));
+        this.renderDrumSlotMapper();
+        if (this.editingPatternId) {
+          const edPat = this.getPatternById(this.editingPatternId);
+          if (edPat && edPat.type === 'drums') {
+            this.renderDrumMatrix(edPat);
+          }
+        }
+      }
       ['drums', 'bass', 'chords'].forEach(trackKey => {
         if (snap.tracks[trackKey]) {
           this.tracks[trackKey].slots = snap.tracks[trackKey].map(s => ({ ...s }));
@@ -543,8 +635,18 @@ export class AppUI {
       });
       this.renderStageTracks();
       this.updateChordDisplay(0, 0);
-      this.log(`[SNAPSHOT] Recalled "${snapName}"`);
+      this.log(`[SNAPSHOT] Recalled "${snapName}" (including 10-slot drum mapping)`);
     });
+
+    // Pre-count & Metronome Tick Callback: Play SF2 Rimshot (GM Note 37) when SoundFont is loaded,
+    // or return false to keep the locally generated oscillator beep as fallback.
+    this.engine.onTickCallback = (isPrecount, scheduledTime) => {
+      if (this.soundFontManager && this.soundFontManager.isLoaded) {
+        const vel = isPrecount ? 118 : 96;
+        return this.soundFontManager.playRimshotTick(scheduledTime, vel);
+      }
+      return false;
+    };
 
     // Pulse Callback from TimingEngine
     this.engine.onPulseCallback = (pulseNumber, scheduledTime) => {
@@ -555,38 +657,17 @@ export class AppUI {
       // Schedule musical pattern notes on playback beats
       if (pulseNumber >= 0) {
         this.schedulePlaybackBeat(pulseNumber, scheduledTime);
+      } else {
+        setTimeout(() => {
+          const pulseLed = document.getElementById('pulse-indicator');
+          if (!this.engine.isPlaying || !pulseLed) return;
+          pulseLed.className = 'beat-pulse-led pulse-precount';
+          pulseLed.textContent = `${pulseNumber}`;
+          setTimeout(() => {
+            if (this.engine.isPlaying) pulseLed.className = 'beat-pulse-led';
+          }, 110);
+        }, timeUntilPulse);
       }
-
-      setTimeout(() => {
-        const pulseLed = document.getElementById('pulse-indicator');
-        if (!this.engine.isPlaying) return;
-
-        if (pulseNumber < 0) {
-          if (pulseLed) {
-            pulseLed.className = 'beat-pulse-led pulse-precount';
-            pulseLed.textContent = `${pulseNumber}`;
-            setTimeout(() => {
-              if (this.engine.isPlaying) pulseLed.className = 'beat-pulse-led';
-            }, 110);
-          }
-        } else {
-          const beatInBar = (pulseNumber % 4) + 1;
-          const barIndex = Math.floor(pulseNumber / 4);
-          this.activeBeatInBar = beatInBar;
-          this.activeBarIndex = barIndex;
-
-          if (pulseLed) {
-            pulseLed.className = 'beat-pulse-led pulse-beat';
-            pulseLed.textContent = `${beatInBar}/4`;
-            setTimeout(() => {
-              if (this.engine.isPlaying) pulseLed.className = 'beat-pulse-led';
-            }, 110);
-          }
-
-          this.highlightPlayingSlots(barIndex);
-          this.updateChordDisplay(barIndex, beatInBar - 1);
-        }
-      }, timeUntilPulse);
     };
 
     // High-resolution Master Time Animation Loop
@@ -610,12 +691,39 @@ export class AppUI {
     requestAnimationFrame(updateClockLoop);
   }
 
-  // Schedule Drum, Bass, and Chord notes for a beat using MidiBridge
+  commitSaveSnapshot(name, isOverwrite = false) {
+    const snapshotSelect = document.getElementById('snapshot-select');
+    const snapshotInput = document.getElementById('snapshot-name-input');
+    this.snapshots[name] = this.captureSnapshotState(parseFloat(this.engine.tempo));
+    this.saveWorkspaceToLocalStorage();
+
+    if (snapshotSelect) {
+      let exists = false;
+      for (const opt of snapshotSelect.options) {
+        if (opt.value === name) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        snapshotSelect.appendChild(opt);
+      }
+      snapshotSelect.value = name;
+    }
+    if (snapshotInput) {
+      snapshotInput.value = name;
+    }
+    this.log(`[SNAPSHOT] ${isOverwrite ? 'Overwrote' : 'Saved new'} snapshot "${name}"`);
+  }
+
+  // Schedule Drum, Bass, and Chord notes for a quarter-note pulse using MidiBridge,
+  // with exact support for any Time Signature (1..21 / 4 or 8) and Resolution (1/8, 1/8T, 1/16, 1/32).
   schedulePlaybackBeat(pulseNumber, beatTime) {
-    const beatInBar = pulseNumber % 4;
-    const barIndex = Math.floor(pulseNumber / 4);
-    const secPerBeat = 60.0 / (parseFloat(this.engine.tempo) || 120);
-    const stepDur = secPerBeat / 4; // 16th note duration
+    const secPerQuarter = 60.0 / (parseFloat(this.engine.tempo) || 120);
+    const nowCtx = this.engine.audioCtx ? this.engine.audioCtx.currentTime : 0;
 
     const anySolo = Object.values(this.tracks).some(t => t.solo);
     const isTrackAudible = (trackKey) => {
@@ -625,67 +733,163 @@ export class AppUI {
       return true;
     };
 
-    // 1. Chords Track
-    const chordSlots = this.tracks.chords.slots;
-    let activeChordSymbol = 'Am7';
-    if (chordSlots.length > 0) {
-      const cSlot = chordSlots[barIndex % chordSlots.length];
-      const cPat = this.getPatternById(cSlot.patternId);
-      if (cPat && cPat.measures && cPat.measures.length > 0) {
-        const m = cPat.measures[barIndex % cPat.measures.length];
-        activeChordSymbol = m[Math.min(m.length - 1, Math.floor((beatInBar / 4) * m.length))] || 'Am7';
-      }
-      if (isTrackAudible('chords') && (beatInBar === 0 || (cPat && cPat.resolution !== '1/1' && beatInBar === 2))) {
-        const midiNotes = this.chordSymbolToMidiNotes(activeChordSymbol);
-        midiNotes.forEach(note => {
-          this.midiBridge.sendNoteOn('chords', note, 85, beatTime, secPerBeat * 1.8);
-        });
-      }
+    // Determine master stage Time Signature from active Drum slot (or fallback 4/4)
+    let stageTimeSig = '4/4';
+    if (this.tracks.drums.slots.length > 0) {
+      const refPat = this.getPatternById(this.tracks.drums.slots[this.activeBarIndex % this.tracks.drums.slots.length]?.patternId);
+      if (refPat && refPat.timeSig) stageTimeSig = refPat.timeSig;
+    }
+    const { upper: stageUpper, lower: stageLower } = this.parseTimeSig(stageTimeSig);
+
+    // Schedule Stage LED & Bar/Slot visual updates accurately for both /4 and /8 meters
+    const unitsPerQuarter = stageLower === 8 ? 2 : 1;
+    for (let u = 0; u < unitsPerQuarter; u++) {
+      const unitIndex = pulseNumber * unitsPerQuarter + u;
+      const beatInBar = (unitIndex % stageUpper) + 1;
+      const barIndex = Math.floor(unitIndex / stageUpper);
+      const tUnit = beatTime + u * (secPerQuarter / unitsPerQuarter);
+      const delayMs = Math.max(0, (tUnit - nowCtx) * 1000);
+
+      setTimeout(() => {
+        if (!this.engine.isPlaying) return;
+        this.activeBeatInBar = beatInBar;
+        this.activeBarIndex = barIndex;
+
+        const pulseLed = document.getElementById('pulse-indicator');
+        if (pulseLed) {
+          pulseLed.className = 'beat-pulse-led pulse-beat';
+          pulseLed.textContent = `${beatInBar}/${stageUpper}`;
+          setTimeout(() => {
+            if (this.engine.isPlaying) pulseLed.className = 'beat-pulse-led';
+          }, 95);
+        }
+
+        this.highlightPlayingSlots(barIndex);
+        this.updateChordDisplay(barIndex, beatInBar - 1, stageUpper);
+      }, delayMs);
     }
 
-    // 2. Drums Track (4 sixteenth steps per beat)
-    if (isTrackAudible('drums') && this.tracks.drums.slots.length > 0) {
-      const dSlot = this.tracks.drums.slots[barIndex % this.tracks.drums.slots.length];
-      const dPat = this.getPatternById(dSlot.patternId);
-      if (dPat && dPat.drumGrid) {
-        const anyRowSolo = dPat.rowSolos && dPat.rowSolos.some(Boolean);
-        for (let sub = 0; sub < 4; sub++) {
-          const stepIndex = (beatInBar * 4 + sub) % 16;
-          const tStep = beatTime + sub * stepDur;
-          DRUM_INSTRUMENTS.forEach((inst, rowIdx) => {
-            if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
-            if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
-            const state = dPat.drumGrid[rowIdx][stepIndex];
-            if (state === 1) {
-              this.midiBridge.sendNoteOn('rhythm', inst.pitch, 100, tStep, 0.15);
-            } else if (state === 2) {
-              this.midiBridge.sendNoteOn('rhythm', inst.pitch, 125, tStep, 0.18);
-            } else if (state === 3) {
-              this.midiBridge.sendNoteOn('rhythm', inst.pitch, 52, tStep, 0.12);
-            }
-          });
+    // 1. Chords Track (Supports independent per-bar chord counts: 1, 2, 3, or 4 chords per bar, plus silent slots)
+    const chordSlots = this.tracks.chords.slots;
+    const cBarIndex = Math.floor((pulseNumber * unitsPerQuarter) / stageUpper);
+    const cBeatInBar = (pulseNumber * unitsPerQuarter) % stageUpper;
+    let activeChordSymbol = 'Am7';
+    if (chordSlots.length > 0) {
+      const cSlot = chordSlots[cBarIndex % chordSlots.length];
+      const cPat = this.getPatternById(cSlot.patternId);
+      if (cPat && cPat.measures && cPat.measures.length > 0) {
+        const barInPat = cBarIndex % cPat.measures.length;
+        const m = cPat.measures[barInPat] || ['Am7'];
+        const chordsInBar = Math.max(1, m.length);
+        const chordSlotIdx = Math.min(chordsInBar - 1, Math.floor((cBeatInBar / Math.max(1, stageUpper)) * chordsInBar));
+        const prevChordSlotIdx = cBeatInBar === 0
+          ? -1
+          : Math.min(chordsInBar - 1, Math.floor(((cBeatInBar - 1) / Math.max(1, stageUpper)) * chordsInBar));
+
+        // Preserve empty string "" or "O" so silent slots stay silent!
+        activeChordSymbol = m[chordSlotIdx] !== undefined ? m[chordSlotIdx] : 'Am7';
+        const isChordSilent = this.isSilentChordSymbol(activeChordSymbol);
+
+        // Trigger whenever the bar begins OR when advancing to a new chord slot within the bar
+        if (cBeatInBar === 0 || chordSlotIdx !== prevChordSlotIdx) {
+          if (isTrackAudible('chords') && !isChordSilent) {
+            const midiNotes = this.chordSymbolToMidiNotes(
+              activeChordSymbol,
+              cPat.voicing || 'Jazz Drop-2',
+              cPat.octave || 0
+            );
+            const beatsForChord = Math.max(0.85, (stageUpper / chordsInBar) * (stageLower === 8 ? 0.5 : 1.0));
+            const chordDur = secPerQuarter * beatsForChord * 0.92;
+            midiNotes.forEach(note => {
+              this.midiBridge.sendNoteOn('chords', note, 85, beatTime, chordDur);
+            });
+          }
+
+          if (this.editingPatternId === cPat.id) {
+            const stepDelay = Math.max(0, (beatTime - nowCtx) * 1000);
+            setTimeout(() => {
+              if (this.engine.isPlaying) this.highlightChordEditorSlot(barInPat, chordSlotIdx);
+            }, stepDelay);
+          }
         }
       }
     }
 
-    // 3. Bass Track (4 sixteenth steps per beat)
-    if (isTrackAudible('bass') && this.tracks.bass.slots.length > 0) {
-      const bSlot = this.tracks.bass.slots[barIndex % this.tracks.bass.slots.length];
+    const isActiveChordSilent = this.isSilentChordSymbol(activeChordSymbol);
+
+    // 2. Drums Track (Exact slot timing for any upper/lower and 1/8, 1/8T, 1/16, 1/32)
+    if (this.tracks.drums.slots.length > 0) {
+      // Find active drum pattern for current bar
+      const dSlotCurrent = this.tracks.drums.slots[cBarIndex % this.tracks.drums.slots.length];
+      const dPat = this.getPatternById(dSlotCurrent.patternId);
+      if (dPat && dPat.drumGrid) {
+        const slotsPerQuarter = this.getSlotsPerQuarter(dPat.timeSig, dPat.resolution);
+        const totalSteps = Math.max(1, this.getTotalSteps(dPat));
+        const dStepDur = secPerQuarter / slotsPerQuarter;
+        const anyRowSolo = dPat.rowSolos && dPat.rowSolos.some(Boolean);
+
+        for (let sub = 0; sub < slotsPerQuarter; sub++) {
+          const absStep = pulseNumber * slotsPerQuarter + sub;
+          const stepIndex = absStep % totalSteps;
+          const tStep = beatTime + sub * dStepDur;
+
+          if (isTrackAudible('drums')) {
+            this.drumSlots.forEach((inst, rowIdx) => {
+              if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
+              if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
+              const state = dPat.drumGrid[rowIdx] && dPat.drumGrid[rowIdx][stepIndex];
+              if (state > 0) {
+                const vel = this.getDrumStepVelocity(state);
+                const dur = state === 2 ? 0.18 : (state === 1 ? 0.15 : 0.12);
+                this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, tStep, dur);
+              }
+            });
+          }
+
+          if (this.editingPatternId === dPat.id) {
+            const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
+            setTimeout(() => {
+              if (this.engine.isPlaying) this.highlightEditorStep('drums', stepIndex);
+            }, stepDelay);
+          }
+        }
+      }
+    }
+
+    // 3. Bass Track (Exact slot timing for any upper/lower and 1/8, 1/8T, 1/16, 1/32)
+    // When active chord is silent, Bass also stops ONLY if "Harmonic Follower" mode is active;
+    // in "Strict Pitch" mode, Bass continues playing its pattern notes.
+    if (this.tracks.bass.slots.length > 0) {
+      const bSlot = this.tracks.bass.slots[cBarIndex % this.tracks.bass.slots.length];
       const bPat = this.getPatternById(bSlot.patternId);
       if (bPat && bPat.bassSteps) {
-        const rootMidi = this.getChordRootMidi(activeChordSymbol) - 24;
-        for (let sub = 0; sub < 4; sub++) {
-          const stepIndex = (beatInBar * 4 + sub) % 16;
-          const stepObj = bPat.bassSteps[stepIndex];
-          if (!stepObj || stepObj.rest) continue;
+        const slotsPerQuarter = this.getSlotsPerQuarter(bPat.timeSig, bPat.resolution);
+        const totalSteps = Math.max(1, this.getTotalSteps(bPat));
+        const bStepDur = secPerQuarter / slotsPerQuarter;
+        const isBassSilencedByChord = isActiveChordSilent && bPat.mode !== 'strict';
+        const rootMidi = isActiveChordSilent ? 45 : (this.getChordRootMidi(activeChordSymbol) - 24);
 
-          const tStep = beatTime + sub * stepDur;
-          const midiPitch = bPat.mode === 'strict'
-            ? (PITCH_TO_MIDI[stepObj.pitch] || 33)
-            : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] || 0));
-          const vel = stepObj.accent ? 120 : 92;
-          const dur = Math.max(0.06, stepDur * (stepObj.gate / 100));
-          this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur);
+        for (let sub = 0; sub < slotsPerQuarter; sub++) {
+          const absStep = pulseNumber * slotsPerQuarter + sub;
+          const stepIndex = absStep % totalSteps;
+          const stepObj = bPat.bassSteps[stepIndex];
+          const tStep = beatTime + sub * bStepDur;
+
+          if (isTrackAudible('bass') && !isBassSilencedByChord && stepObj && !stepObj.rest) {
+            const midiPitch = bPat.mode === 'strict'
+              ? (PITCH_TO_MIDI[stepObj.pitch] ?? 33)
+              : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] ?? 0));
+            const vel = stepObj.accent ? 120 : 92;
+            const dur = Math.max(0.06, bStepDur * (stepObj.gate / 100));
+            this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur);
+          }
+
+          if (this.editingPatternId === bPat.id) {
+            const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
+            setTimeout(() => {
+              if (this.engine.isPlaying) this.highlightEditorStep('bass', stepIndex);
+            }, stepDelay);
+          }
         }
       }
     }
@@ -719,7 +923,7 @@ export class AppUI {
     }
   }
 
-  updateChordDisplay(barIndex = 0, beatIndex = 0) {
+  updateChordDisplay(barIndex = 0, beatIndex = 0, totalBeatsInBar = 4) {
     const nowMeta = document.getElementById('chord-now-meta');
     const nowSymbol = document.getElementById('chord-now-symbol');
     const nextMeta = document.getElementById('chord-next-meta');
@@ -733,28 +937,61 @@ export class AppUI {
     const currentPat = this.getPatternById(currentSlot.patternId);
     const nextPat = this.getPatternById(nextSlot.patternId);
 
-    let nowChord = 'Am7';
-    let nextChord = 'D7';
+    let nowMeasure = ['Am7'];
+    let nextMeasure = ['D7'];
+    let activeIdxInBar = 0;
 
     if (currentPat && currentPat.measures && currentPat.measures.length > 0) {
       const m = currentPat.measures[barIndex % currentPat.measures.length];
-      const idx = Math.min(m.length - 1, Math.floor((beatIndex / 4) * m.length));
-      nowChord = m[idx] || 'Am7';
+      if (m && m.length > 0) {
+        nowMeasure = m;
+        activeIdxInBar = Math.min(m.length - 1, Math.floor((beatIndex / Math.max(1, totalBeatsInBar)) * m.length));
+      }
     }
     if (nextPat && nextPat.measures && nextPat.measures.length > 0) {
       const nextM = nextPat.measures[(barIndex + 1) % nextPat.measures.length];
-      nextChord = (nextM && nextM[0]) || 'D7';
+      if (nextM && nextM.length > 0) {
+        nextMeasure = nextM;
+      }
     }
 
-    if (nowMeta) nowMeta.textContent = `NOW • BEAT ${beatIndex + 1} / 4`;
-    if (nowSymbol) nowSymbol.textContent = nowChord;
-    if (nextMeta) nextMeta.textContent = `NEXT • BAR ${barIndex + 2}`;
-    if (nextSymbol) nextSymbol.textContent = nextChord;
+    const isLastChordOfCurrentBar = activeIdxInBar >= nowMeasure.length - 1;
+
+    if (nowMeta) {
+      nowMeta.textContent = `NOW • BAR ${barIndex + 1} • BEAT ${beatIndex + 1} / ${totalBeatsInBar}`;
+    }
+    if (nowSymbol) {
+      const countClass = `count-${Math.min(4, Math.max(1, nowMeasure.length))}`;
+      nowSymbol.className = `chord-stage-symbol chord-stage-bar-row ${countClass}`;
+      nowSymbol.innerHTML = nowMeasure.map((sym, i) => {
+        const silent = this.isSilentChordSymbol(sym);
+        const label = silent ? 'Ø' : sym;
+        const activeClass = i === activeIdxInBar ? ' is-active' : '';
+        const silentClass = silent ? ' is-silent-chord' : '';
+        const sep = i < nowMeasure.length - 1 ? '<span class="chord-bar-sep">·</span>' : '';
+        return `<span class="chord-bar-item${activeClass}${silentClass}" title="${silent ? 'Silent / N.C.' : label}">${label}</span>${sep}`;
+      }).join('');
+    }
+
+    if (nextMeta) {
+      nextMeta.textContent = `NEXT BAR • BAR ${barIndex + 2}`;
+    }
+    if (nextSymbol) {
+      const nextCountClass = `count-${Math.min(4, Math.max(1, nextMeasure.length))}`;
+      nextSymbol.className = `chord-stage-symbol chord-stage-bar-row ${nextCountClass}`;
+      nextSymbol.innerHTML = nextMeasure.map((sym, i) => {
+        const silent = this.isSilentChordSymbol(sym);
+        const label = silent ? 'Ø' : sym;
+        const immediateClass = (isLastChordOfCurrentBar && i === 0) ? ' is-next-immediate' : '';
+        const silentClass = silent ? ' is-silent-chord' : '';
+        const sep = i < nextMeasure.length - 1 ? '<span class="chord-bar-sep">·</span>' : '';
+        return `<span class="chord-bar-item${immediateClass}${silentClass}" title="${silent ? 'Silent / N.C.' : label}">${label}</span>${sep}`;
+      }).join('');
+    }
   }
 
   // --- 4. Block C: The Loops & Pattern Palette ---
   bindStageTracksAndPalette() {
-    // Filter chips on Main Stage Palette
     const paletteChips = document.querySelectorAll('#palette-filter-chips .filter-chip');
     paletteChips.forEach(chip => {
       chip.addEventListener('click', () => {
@@ -839,7 +1076,6 @@ export class AppUI {
 
       container.appendChild(row);
 
-      // Populate slots inside this track row
       const chainEl = row.querySelector(`#slots-chain-${trackKey}`);
       track.slots.forEach((slotObj, slotIdx) => {
         const pat = this.getPatternById(slotObj.patternId) || {
@@ -877,18 +1113,15 @@ export class AppUI {
 
         const slotBox = unit.querySelector('.pattern-slot-box');
 
-        // Click to select slot
         slotBox.addEventListener('click', () => {
           this.tracks[trackKey].selectedSlot = slotIdx;
           this.renderStageTracks();
         });
 
-        // Double click to jump directly to pattern editor
         slotBox.addEventListener('dblclick', () => {
           this.openEditorForPattern(pat.id);
         });
 
-        // Drag & Drop support (both from Palette and slot-to-slot reordering)
         slotBox.addEventListener('dragstart', (e) => {
           e.dataTransfer.setData('text/plain', JSON.stringify({
             source: 'slot',
@@ -937,7 +1170,6 @@ export class AppUI {
       });
     });
 
-    // Bind events for newly rendered controls
     container.querySelectorAll('.track-preset-select').forEach(sel => {
       sel.addEventListener('change', (e) => {
         const trackKey = sel.getAttribute('data-track');
@@ -1040,48 +1272,21 @@ export class AppUI {
   }
 
   getPresetOptionsHtml(trackKey) {
-    if (trackKey === 'drums') {
-      const current = this.soundFontManager.activePresets.rhythm.program;
-      return [
-        [0, 'Standard Kit (0)'],
-        [8, 'Room Kit (8)'],
-        [16, 'Power Kit (16)'],
-        [24, '808 / Electronic (24)'],
-        [32, 'Jazz Kit (32)'],
-        [40, 'Brush Kit (40)']
-      ].map(([val, text]) => `<option value="${val}" ${current === val ? 'selected' : ''}>${text}</option>`).join('');
-    }
-    if (trackKey === 'bass') {
-      const current = this.soundFontManager.activePresets.bass.program;
-      return [
-        [33, 'Fingered Bass (33)'],
-        [34, 'Picked Bass (34)'],
-        [35, 'Fretless Bass (35)'],
-        [36, 'Slap Bass 1 (36)'],
-        [37, 'Slap Bass 2 (37)'],
-        [38, 'Synth Bass 1 (38)'],
-        [39, 'Synth Bass 2 (39)']
-      ].map(([val, text]) => `<option value="${val}" ${current === val ? 'selected' : ''}>${text}</option>`).join('');
-    }
-    const current = this.soundFontManager.activePresets.chords.program;
-    return [
-      [0, 'Grand Piano (0)'],
-      [1, 'Bright Piano (1)'],
-      [4, 'Rhodes EP 1 (4)'],
-      [5, 'DX EP 2 (5)'],
-      [7, 'Clavinet (7)'],
-      [11, 'Vibraphone (11)'],
-      [89, 'Warm Synth Pad (89)']
-    ].map(([val, text]) => `<option value="${val}" ${current === val ? 'selected' : ''}>${text}</option>`).join('');
+    const modKey = trackKey === 'drums' ? 'rhythm' : trackKey;
+    const current = this.soundFontManager.activePresets[modKey].program;
+    const list = GM_PRESET_OPTIONS[trackKey] || [];
+    return list
+      .map(opt => `<option value="${opt.value}" ${current === opt.value ? 'selected' : ''}>${opt.label}</option>`)
+      .join('');
   }
 
   async triggerQuickAudition(trackKey) {
     await this.ensureSystemInitialized();
     const now = this.engine.audioCtx.currentTime;
     if (trackKey === 'drums') {
-      this.midiBridge.sendNoteOn('rhythm', 36, 115, now, 0.2);
-      this.midiBridge.sendNoteOn('rhythm', 42, 95,  now + 0.14, 0.15);
-      this.midiBridge.sendNoteOn('rhythm', 38, 112, now + 0.28, 0.2);
+      this.midiBridge.sendNoteOn('rhythm', this.drumSlots[0].pitch, 115, now, 0.2);
+      this.midiBridge.sendNoteOn('rhythm', this.drumSlots[2].pitch, 95,  now + 0.14, 0.15);
+      this.midiBridge.sendNoteOn('rhythm', this.drumSlots[1].pitch, 112, now + 0.28, 0.2);
     } else if (trackKey === 'bass') {
       this.midiBridge.sendNoteOn('bass', 33, 110, now, 0.3);
       this.midiBridge.sendNoteOn('bass', 40, 102, now + 0.22, 0.35);
@@ -1123,7 +1328,7 @@ export class AppUI {
       const tile = document.createElement('div');
       tile.className = `palette-tile type-${p.type}`;
       tile.draggable = true;
-      tile.title = 'Drag onto a track slot, or click to assign to the currently selected slot';
+      tile.title = 'Drag onto a track slot, Click to assign to selected slot, Double-click to open Editor';
       tile.innerHTML = `
         <div class="palette-tile-top">
           <span>${p.id}</span>
@@ -1144,852 +1349,19 @@ export class AppUI {
         if (!track || !track.slots.length) return;
         const targetIdx = Math.min(track.selectedSlot || 0, track.slots.length - 1);
         track.slots[targetIdx].patternId = p.id;
+        this.saveWorkspaceToLocalStorage();
         this.renderStageTracks();
         this.updateChordDisplay(this.activeBarIndex, 0);
         this.log(`[PALETTE] Assigned ${p.id} (${p.name}) to ${track.label} Slot #${targetIdx + 1}`);
       });
 
-      grid.appendChild(tile);
-    });
-  }
-
-  // --- 5. View 2: Unified Patterns Library & Specialized Editors ---
-  bindPatternLibraryAndEditors() {
-    const libChips = document.querySelectorAll('#library-filter-chips .filter-chip');
-    libChips.forEach(chip => {
-      chip.addEventListener('click', () => {
-        libChips.forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        this.libraryFilter = chip.getAttribute('data-filter');
-        this.renderPatternLibrary();
-      });
-    });
-
-    const libSearch = document.getElementById('library-search-input');
-    if (libSearch) {
-      libSearch.addEventListener('input', (e) => {
-        this.librarySearch = e.target.value.trim().toLowerCase();
-        this.renderPatternLibrary();
-      });
-    }
-
-    // Back to Patterns buttons
-    document.querySelectorAll('.btn-back-to-patterns').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.stopSoloAudition();
-        this.closeEditorsToLibrary();
-      });
-    });
-
-    // Save Changes buttons in Editors
-    document.querySelectorAll('.btn-save-pattern').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.saveActiveEditorChanges();
-      });
-    });
-
-    this.bindDrumEditorControls();
-    this.bindBassEditorControls();
-    this.bindChordEditorControls();
-  }
-
-  renderPatternLibrary() {
-    const listEl = document.getElementById('pattern-table-list');
-    if (!listEl) return;
-    listEl.innerHTML = '';
-
-    const filtered = this.patterns.filter(p => {
-      if (this.libraryFilter !== 'all' && p.type !== this.libraryFilter) return false;
-      if (this.librarySearch && !(`${p.id} ${p.name}`).toLowerCase().includes(this.librarySearch)) return false;
-      return true;
-    });
-
-    filtered.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'pattern-row';
-
-      const syncText = p.syncMaster ? 'Sync with Master' : `${p.bpm || 120} BPM`;
-      const stepsCount = (p.bars || 1) * 16;
-      const lengthText = `${p.bars || 1} Bar${(p.bars || 1) > 1 ? 's' : ''} (${stepsCount} Steps @ ${p.resolution || '1/16'})`;
-
-      const dotsHtml = (p.preview || new Array(16).fill(0)).map(v =>
-        `<span class="mini-step-dot ${v ? 'on' : ''} ${p.type}"></span>`
-      ).join('');
-
-      row.innerHTML = `
-        <span class="pattern-id-pill ${p.type}">${p.id}</span>
-        <input type="text" class="pattern-name-inline" maxlength="12" value="${p.name}" data-id="${p.id}" title="Click to rename (max 12 chars)">
-        <span class="badge-mono">${p.timeSig}</span>
-        <span class="badge-mono col-sync">${syncText}</span>
-        <span class="badge-mono col-length">${lengthText}</span>
-        <div class="mini-step-preview">${dotsHtml}</div>
-        <div class="pattern-row-actions">
-          <button class="btn btn-green btn-edit-pattern" data-id="${p.id}">EDIT</button>
-          <button class="btn btn-danger btn-delete-pattern" data-id="${p.id}">DELETE</button>
-        </div>
-      `;
-
-      const nameInput = row.querySelector('.pattern-name-inline');
-      nameInput.addEventListener('change', (e) => {
-        const clean = e.target.value.trim().slice(0, 12) || p.name;
-        p.name = clean;
-        e.target.value = clean;
-        this.renderPalette();
-        this.renderStageTracks();
-        this.log(`[PATTERNS] Renamed ${p.id} to "${clean}"`);
-      });
-
-      row.querySelector('.btn-edit-pattern').addEventListener('click', () => {
+      tile.addEventListener('dblclick', () => {
         this.openEditorForPattern(p.id);
       });
 
-      row.querySelector('.btn-delete-pattern').addEventListener('click', () => {
-        this.openDeleteConfirmModal(p.id);
-      });
-
-      listEl.appendChild(row);
+      grid.appendChild(tile);
     });
-  }
-
-  openEditorForPattern(patternId) {
-    const pat = this.getPatternById(patternId);
-    if (!pat) return;
-
-    this.editingPatternId = pat.id;
-
-    // Ensure PATTERNS tab is active
-    document.querySelectorAll('.nav-tab-btn').forEach(b => {
-      b.classList.toggle('active', b.getAttribute('data-target') === 'view-patterns');
-    });
-    document.querySelectorAll('.view-container').forEach(v => {
-      v.classList.toggle('active', v.id === 'view-patterns');
-    });
-
-    // Hide Library Table, show the corresponding Editor
-    const libView = document.getElementById('pattern-library-view');
-    if (libView) libView.style.display = 'none';
-
-    document.querySelectorAll('.editor-panel').forEach(ed => ed.classList.remove('active'));
-
-    if (pat.type === 'drums') {
-      this.populateDrumEditor(pat);
-      document.getElementById('editor-drums').classList.add('active');
-    } else if (pat.type === 'bass') {
-      this.populateBassEditor(pat);
-      document.getElementById('editor-bass').classList.add('active');
-    } else if (pat.type === 'chords') {
-      this.populateChordEditor(pat);
-      document.getElementById('editor-chords').classList.add('active');
-    }
-
-    this.log(`[EDITOR] Opened ${pat.type.toUpperCase()} Editor for ${pat.id} (${pat.name})`);
-  }
-
-  closeEditorsToLibrary() {
-    document.querySelectorAll('.editor-panel').forEach(ed => ed.classList.remove('active'));
-    const libView = document.getElementById('pattern-library-view');
-    if (libView) libView.style.display = 'block';
-    this.editingPatternId = null;
-    this.log('[UI] Returned to Pattern Library');
-  }
-
-  saveActiveEditorChanges() {
-    const pat = this.getPatternById(this.editingPatternId);
-    if (!pat) return;
-
-    if (pat.type === 'drums') {
-      pat.name = (document.getElementById('drum-ed-name').value.trim() || pat.name).slice(0, 12);
-      pat.timeSig = document.getElementById('drum-ed-timesig').value;
-      pat.syncMaster = document.getElementById('drum-ed-sync').checked;
-      pat.bars = parseInt(document.getElementById('drum-ed-bars').textContent, 10) || 1;
-      pat.resolution = document.getElementById('drum-ed-res').value;
-      pat.tension = parseInt(document.getElementById('drum-ed-tension').value, 10) || 0;
-      pat.preview = pat.drumGrid[0].slice(0, 16).map((v, i) => (v > 0 || pat.drumGrid[1][i] > 0 || pat.drumGrid[2][i] > 0 ? 1 : 0));
-    } else if (pat.type === 'bass') {
-      pat.name = (document.getElementById('bass-ed-name').value.trim() || pat.name).slice(0, 12);
-      pat.timeSig = document.getElementById('bass-ed-timesig').value;
-      pat.syncMaster = document.getElementById('bass-ed-sync').checked;
-      pat.resolution = document.getElementById('bass-ed-res').value;
-      pat.preview = pat.bassSteps.slice(0, 16).map(s => (s.rest ? 0 : 1));
-    } else if (pat.type === 'chords') {
-      pat.name = (document.getElementById('chord-ed-name').value.trim() || pat.name).slice(0, 12);
-      pat.timeSig = document.getElementById('chord-ed-timesig').value;
-      pat.syncMaster = document.getElementById('chord-ed-sync').checked;
-      pat.voicing = document.getElementById('chord-ed-voicing').value;
-      pat.tension = parseInt(document.getElementById('chord-ed-tension').value, 10) || 0;
-    }
-
-    this.renderPatternLibrary();
-    this.renderPalette();
-    this.renderStageTracks();
-    this.updateChordDisplay(this.activeBarIndex, 0);
-    this.log(`[EDITOR] Saved changes to ${pat.id} (${pat.name})`);
-    this.stopSoloAudition();
-    this.closeEditorsToLibrary();
-  }
-
-  // --- 5.1 Drum Lab Editor (#editor-drums) ---
-  bindDrumEditorControls() {
-    const barsDec = document.getElementById('drum-bars-dec');
-    const barsInc = document.getElementById('drum-bars-inc');
-    const barsVal = document.getElementById('drum-ed-bars');
-    const tensionSlider = document.getElementById('drum-ed-tension');
-    const tensionVal = document.getElementById('drum-ed-tension-val');
-    const soloBtn = document.getElementById('btn-drum-solo');
-
-    barsDec.addEventListener('click', () => {
-      const pat = this.getPatternById(this.editingPatternId);
-      if (!pat) return;
-      pat.bars = Math.max(1, (pat.bars || 1) - 1);
-      barsVal.textContent = pat.bars;
-      this.renderDrumMatrix(pat);
-    });
-
-    barsInc.addEventListener('click', () => {
-      const pat = this.getPatternById(this.editingPatternId);
-      if (!pat) return;
-      pat.bars = Math.min(4, (pat.bars || 1) + 1);
-      barsVal.textContent = pat.bars;
-      this.renderDrumMatrix(pat);
-    });
-
-    tensionSlider.addEventListener('input', (e) => {
-      tensionVal.textContent = `${e.target.value}%`;
-    });
-
-    soloBtn.addEventListener('click', () => {
-      this.toggleSoloAudition('drums', soloBtn);
-    });
-  }
-
-  populateDrumEditor(pat) {
-    document.getElementById('drum-ed-title').textContent = `Editing: ${pat.id} ${pat.name}`;
-    document.getElementById('drum-ed-name').value = pat.name;
-    document.getElementById('drum-ed-timesig').value = pat.timeSig;
-    document.getElementById('drum-ed-sync').checked = pat.syncMaster;
-    document.getElementById('drum-ed-bars').textContent = pat.bars || 1;
-    document.getElementById('drum-ed-res').value = pat.resolution || '1/16';
-    document.getElementById('drum-ed-tension').value = pat.tension || 35;
-    document.getElementById('drum-ed-tension-val').textContent = `${pat.tension || 35}%`;
-
-    this.renderDrumMatrix(pat);
-  }
-
-  renderDrumMatrix(pat) {
-    const container = document.getElementById('drum-matrix-container');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const stepCount = (pat.bars || 1) > 1 ? 32 : 16;
-
-    DRUM_INSTRUMENTS.forEach((inst, rowIdx) => {
-      while (pat.drumGrid[rowIdx].length < stepCount) {
-        pat.drumGrid[rowIdx].push(0);
-      }
-
-      const rowEl = document.createElement('div');
-      rowEl.className = 'drum-row';
-
-      const isMuted = pat.rowMutes && pat.rowMutes[rowIdx];
-      const isSolo = pat.rowSolos && pat.rowSolos[rowIdx];
-
-      rowEl.innerHTML = `
-        <div class="drum-row-header">
-          <div>
-            <div class="drum-inst-code">${inst.code}</div>
-            <div class="drum-inst-sub">${inst.label}</div>
-          </div>
-          <div class="track-ms-cluster">
-            <button class="btn-ms mute-btn ${isMuted ? 'active' : ''}" data-row="${rowIdx}">M</button>
-            <button class="btn-ms solo-btn ${isSolo ? 'active' : ''}" data-row="${rowIdx}">S</button>
-          </div>
-        </div>
-        <div class="drum-steps-grid"></div>
-      `;
-
-      rowEl.querySelector('.mute-btn').addEventListener('click', (e) => {
-        pat.rowMutes[rowIdx] = !pat.rowMutes[rowIdx];
-        e.currentTarget.classList.toggle('active', pat.rowMutes[rowIdx]);
-      });
-
-      rowEl.querySelector('.solo-btn').addEventListener('click', (e) => {
-        pat.rowSolos[rowIdx] = !pat.rowSolos[rowIdx];
-        e.currentTarget.classList.toggle('active', pat.rowSolos[rowIdx]);
-      });
-
-      const stepsGrid = rowEl.querySelector('.drum-steps-grid');
-      for (let s = 0; s < stepCount; s++) {
-        const state = pat.drumGrid[rowIdx][s] || 0;
-        const btn = document.createElement('button');
-        btn.className = 'drum-step-btn';
-        btn.setAttribute('data-state', state);
-        btn.title = `Step ${s + 1} (Click to cycle: Off -> Hit -> Accent -> Ghost)`;
-
-        btn.addEventListener('click', async () => {
-          const nextState = ((pat.drumGrid[rowIdx][s] || 0) + 1) % 4;
-          pat.drumGrid[rowIdx][s] = nextState;
-          btn.setAttribute('data-state', nextState);
-
-          if (nextState > 0) {
-            await this.ensureSystemInitialized();
-            const vel = nextState === 2 ? 125 : (nextState === 1 ? 100 : 52);
-            this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, this.engine.audioCtx.currentTime, 0.15);
-          }
-        });
-
-        stepsGrid.appendChild(btn);
-      }
-
-      container.appendChild(rowEl);
-    });
-  }
-
-  // --- 5.2 Bassline Editor (#editor-bass) ---
-  bindBassEditorControls() {
-    const modeStrictBtn = document.getElementById('bass-mode-strict');
-    const modeFollowerBtn = document.getElementById('bass-mode-follower');
-    const presetSelect = document.getElementById('bass-ed-preset');
-    const rehearsalMuteBtn = document.getElementById('btn-rehearsal-mute-bass');
-    const soloBtn = document.getElementById('btn-bass-solo');
-
-    modeStrictBtn.addEventListener('click', () => {
-      const pat = this.getPatternById(this.editingPatternId);
-      if (!pat) return;
-      pat.mode = 'strict';
-      modeStrictBtn.classList.add('active');
-      modeFollowerBtn.classList.remove('active');
-      this.renderBassRibbon(pat);
-      this.log('[BASS EDITOR] Switched to STRICT PITCH mode');
-    });
-
-    modeFollowerBtn.addEventListener('click', () => {
-      const pat = this.getPatternById(this.editingPatternId);
-      if (!pat) return;
-      pat.mode = 'follower';
-      modeFollowerBtn.classList.add('active');
-      modeStrictBtn.classList.remove('active');
-      this.renderBassRibbon(pat);
-      this.log('[BASS EDITOR] Switched to HARMONIC FOLLOWER mode');
-    });
-
-    presetSelect.addEventListener('change', (e) => {
-      const prog = parseInt(e.target.value, 10);
-      const optText = presetSelect.options[presetSelect.selectedIndex].text;
-      this.soundFontManager.setPreset(2, 0, prog, optText);
-      this.renderStageTracks();
-      this.log(`[SF2] Bass Preset -> ${optText}`);
-    });
-
-    rehearsalMuteBtn.addEventListener('click', () => {
-      this.tracks.bass.muted = !this.tracks.bass.muted;
-      rehearsalMuteBtn.classList.toggle('active', this.tracks.bass.muted);
-      this.updateEffectiveTrackGains();
-      this.renderStageTracks();
-      this.log(`[REHEARSAL] Bass Rehearsal Mute ${this.tracks.bass.muted ? 'ENABLED' : 'DISABLED'}`);
-    });
-
-    soloBtn.addEventListener('click', () => {
-      this.toggleSoloAudition('bass', soloBtn);
-    });
-  }
-
-  populateBassEditor(pat) {
-    document.getElementById('bass-ed-title').textContent = `Editing: ${pat.id} ${pat.name}`;
-    document.getElementById('bass-ed-name').value = pat.name;
-    document.getElementById('bass-ed-timesig').value = pat.timeSig;
-    document.getElementById('bass-ed-sync').checked = pat.syncMaster;
-    document.getElementById('bass-ed-res').value = pat.resolution || '1/16';
-    document.getElementById('bass-ed-preset').value = pat.preset || 33;
-
-    const isStrict = pat.mode === 'strict';
-    document.getElementById('bass-mode-strict').classList.toggle('active', isStrict);
-    document.getElementById('bass-mode-follower').classList.toggle('active', !isStrict);
-
-    const rehearsalMuteBtn = document.getElementById('btn-rehearsal-mute-bass');
-    rehearsalMuteBtn.classList.toggle('active', this.tracks.bass.muted);
-
-    this.renderBassRibbon(pat);
-  }
-
-  renderBassRibbon(pat) {
-    const ribbon = document.getElementById('bass-step-ribbon');
-    if (!ribbon) return;
-    ribbon.innerHTML = '';
-
-    pat.bassSteps.forEach((step, idx) => {
-      const card = document.createElement('div');
-      card.className = `bass-step-card ${step.rest ? 'is-rest' : ''}`;
-
-      const badgeText = pat.mode === 'strict' ? step.pitch : step.degree;
-      const gateText = step.gate === 25 ? '25% Stac' : (step.gate === 50 ? '50% Std' : '100% Leg');
-
-      card.innerHTML = `
-        <span class="bass-step-num">#${idx + 1}</span>
-        <button class="bass-pitch-pill" title="Click to cycle pitch / scale degree">${badgeText}</button>
-        <div class="bass-gate-bar" title="Click to cycle Gate Length (25% / 50% / 100%)">
-          <div class="bass-gate-fill" style="width: ${step.gate}%;"></div>
-          <span class="bass-gate-label">${gateText}</span>
-        </div>
-        <div class="bass-articulations">
-          <button class="bass-art-btn ${step.accent ? 'active' : ''}" data-art="accent" title="Accent">&gt;</button>
-          <button class="bass-art-btn ${step.slide ? 'active' : ''}" data-art="slide" title="Slide / Glissando">/</button>
-          <button class="bass-art-btn ${step.rest ? 'active' : ''}" data-art="rest" title="Rest (Silence step)">R</button>
-        </div>
-      `;
-
-      // Cycle Pitch / Degree
-      card.querySelector('.bass-pitch-pill').addEventListener('click', async () => {
-        if (pat.mode === 'strict') {
-          const curIdx = STRICT_PITCHES.indexOf(step.pitch);
-          step.pitch = STRICT_PITCHES[(curIdx + 1) % STRICT_PITCHES.length];
-        } else {
-          const curIdx = HARMONIC_DEGREES.indexOf(step.degree);
-          step.degree = HARMONIC_DEGREES[(curIdx + 1) % HARMONIC_DEGREES.length];
-        }
-        this.renderBassRibbon(pat);
-
-        await this.ensureSystemInitialized();
-        const midiNote = pat.mode === 'strict'
-          ? (PITCH_TO_MIDI[step.pitch] || 33)
-          : (33 + (DEGREE_TO_OFFSET[step.degree] || 0));
-        this.midiBridge.sendNoteOn('bass', midiNote, step.accent ? 120 : 95, this.engine.audioCtx.currentTime, 0.25);
-      });
-
-      // Cycle Gate Length
-      card.querySelector('.bass-gate-bar').addEventListener('click', () => {
-        step.gate = step.gate === 25 ? 50 : (step.gate === 50 ? 100 : 25);
-        this.renderBassRibbon(pat);
-      });
-
-      // Articulation toggles
-      card.querySelectorAll('.bass-art-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const art = btn.getAttribute('data-art');
-          step[art] = !step[art];
-          this.renderBassRibbon(pat);
-        });
-      });
-
-      ribbon.appendChild(card);
-    });
-  }
-
-  // --- 5.3 Chord Editor (#editor-chords) ---
-  bindChordEditorControls() {
-    const resBtns = document.querySelectorAll('.chord-res-btn');
-    const presetSelect = document.getElementById('chord-ed-preset');
-    const tensionSlider = document.getElementById('chord-ed-tension');
-    const tensionVal = document.getElementById('chord-ed-tension-val');
-    const soloBtn = document.getElementById('btn-chord-solo');
-
-    resBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const pat = this.getPatternById(this.editingPatternId);
-        if (!pat) return;
-        const newRes = btn.getAttribute('data-res');
-        pat.resolution = newRes;
-        resBtns.forEach(b => b.classList.toggle('active', b === btn));
-
-        const slotsPerBar = newRes === '1/1' ? 1 : (newRes === '1/2' ? 2 : 4);
-        pat.measures = pat.measures.map(m => {
-          const next = [];
-          for (let i = 0; i < slotsPerBar; i++) {
-            next.push(m[i] || m[m.length - 1] || 'Cmaj7');
-          }
-          return next;
-        });
-        this.renderChordMeasuresGrid(pat);
-      });
-    });
-
-    presetSelect.addEventListener('change', (e) => {
-      const prog = parseInt(e.target.value, 10);
-      const optText = presetSelect.options[presetSelect.selectedIndex].text;
-      this.soundFontManager.setPreset(3, 0, prog, optText);
-      this.renderStageTracks();
-      this.log(`[SF2] Chords Preset -> ${optText}`);
-    });
-
-    tensionSlider.addEventListener('input', (e) => {
-      tensionVal.textContent = `${e.target.value}%`;
-    });
-
-    soloBtn.addEventListener('click', () => {
-      this.toggleSoloAudition('chords', soloBtn);
-    });
-  }
-
-  populateChordEditor(pat) {
-    document.getElementById('chord-ed-title').textContent = `Editing: ${pat.id} ${pat.name}`;
-    document.getElementById('chord-ed-name').value = pat.name;
-    document.getElementById('chord-ed-timesig').value = pat.timeSig;
-    document.getElementById('chord-ed-sync').checked = pat.syncMaster;
-    document.getElementById('chord-ed-voicing').value = pat.voicing || 'Jazz Drop-2';
-    document.getElementById('chord-ed-preset').value = pat.preset || 0;
-    document.getElementById('chord-ed-tension').value = pat.tension || 25;
-    document.getElementById('chord-ed-tension-val').textContent = `${pat.tension || 25}%`;
-
-    document.querySelectorAll('.chord-res-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-res') === (pat.resolution || '1/2'));
-    });
-
-    this.renderChordMeasuresGrid(pat);
-  }
-
-  renderChordMeasuresGrid(pat) {
-    const grid = document.getElementById('chord-measures-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    const slotsPerBar = pat.resolution === '1/1' ? 1 : (pat.resolution === '1/2' ? 2 : 4);
-
-    pat.measures.forEach((barChords, barIdx) => {
-      const card = document.createElement('div');
-      card.className = 'measure-card';
-
-      card.innerHTML = `
-        <div class="measure-card-header">
-          <span>BAR ${barIdx + 1}</span>
-          <span>${pat.timeSig} • ${pat.resolution}</span>
-        </div>
-        <div class="measure-slots-row" style="grid-template-columns: repeat(${slotsPerBar}, 1fr);"></div>
-      `;
-
-      const slotsRow = card.querySelector('.measure-slots-row');
-      for (let s = 0; s < slotsPerBar; s++) {
-        const symbol = barChords[s] || 'Am7';
-        const analysis = this.analyzeChordModalFunction(symbol);
-
-        const slotEl = document.createElement('div');
-        slotEl.className = 'chord-beat-slot';
-        slotEl.innerHTML = `
-          <div class="chord-slot-top">
-            <input type="text" class="chord-symbol-input" value="${symbol}" title="Enter chord symbol (e.g. Dm7, G7b9, Cmaj7)">
-            <span class="chord-valid-check" title="Valid Chord Formula">✓</span>
-          </div>
-          <div class="chord-modal-badge">${analysis}</div>
-        `;
-
-        const inputEl = slotEl.querySelector('.chord-symbol-input');
-        const badgeEl = slotEl.querySelector('.chord-modal-badge');
-        const checkEl = slotEl.querySelector('.chord-valid-check');
-
-        inputEl.addEventListener('input', (e) => {
-          const val = e.target.value.trim();
-          const valid = /^[A-G][b#]?(m|maj|min|dim|aug|sus|[0-9]|b|#|-|\+)*$/i.test(val) && val.length > 0;
-          checkEl.textContent = valid ? '✓' : '!';
-          checkEl.style.color = valid ? 'var(--color-drums)' : 'var(--color-playing-border)';
-          if (valid) {
-            barChords[s] = val;
-            badgeEl.textContent = this.analyzeChordModalFunction(val);
-          }
-        });
-
-        inputEl.addEventListener('click', async () => {
-          await this.ensureSystemInitialized();
-          const notes = this.chordSymbolToMidiNotes(inputEl.value.trim() || 'Am7');
-          const now = this.engine.audioCtx.currentTime;
-          notes.forEach(n => this.midiBridge.sendNoteOn('chords', n, 88, now, 0.5));
-        });
-
-        slotsRow.appendChild(slotEl);
-      }
-
-      grid.appendChild(card);
-    });
-  }
-
-  analyzeChordModalFunction(symbol) {
-    const s = symbol.trim();
-    if (/m7b5|dim/i.test(s)) return 'vii° / iiø Locrian';
-    if (/maj7#11|maj9#11/i.test(s)) return 'IVmaj7 Lydian';
-    if (/maj7|M7/i.test(s)) return 'Imaj7 Ionian';
-    if (/7b9|7#9|7#5|7alt/i.test(s)) return 'V7 Altered';
-    if (/m7|-7/i.test(s)) return 'ii-7 Dorian / vi-7';
-    if (/7/.test(s)) return 'V7 Mixolydian';
-    return 'Modal Triad / Diatonic';
-  }
-
-  chordSymbolToMidiNotes(symbol) {
-    const match = /^([A-G][b#]?)(.*)$/.exec(symbol.trim());
-    if (!match) return [60, 64, 67, 71];
-    const root = ROOT_TO_MIDI[match[1]] || 60;
-    const qual = match[2];
-
-    if (/m7b5/i.test(qual)) return [root, root + 3, root + 6, root + 10];
-    if (/dim/i.test(qual))  return [root, root + 3, root + 6, root + 9];
-    if (/maj7|M7/.test(qual)) return [root, root + 4, root + 7, root + 11];
-    if (/m7|-7/.test(qual)) return [root, root + 3, root + 7, root + 10];
-    if (/7b9/.test(qual))   return [root, root + 4, root + 7, root + 10, root + 13];
-    if (/7#5/.test(qual))   return [root, root + 4, root + 8, root + 10];
-    if (/7/.test(qual))     return [root, root + 4, root + 7, root + 10];
-    if (/m/.test(qual))     return [root, root + 3, root + 7];
-    return [root, root + 4, root + 7];
-  }
-
-  getChordRootMidi(symbol) {
-    const match = /^([A-G][b#]?)/.exec(symbol.trim());
-    return match ? (ROOT_TO_MIDI[match[1]] || 60) : 60;
-  }
-
-  // Solo audition helper inside Editors
-  async toggleSoloAudition(type, buttonEl) {
-    await this.ensureSystemInitialized();
-    if (this.soloTimer) {
-      this.stopSoloAudition();
-      return;
-    }
-
-    const pat = this.getPatternById(this.editingPatternId);
-    if (!pat) return;
-
-    buttonEl.textContent = '■ STOP SOLO';
-    buttonEl.classList.add('btn-danger');
-    let step = 0;
-    const stepMs = (60 / (parseFloat(this.engine.tempo) || 120) / 4) * 1000;
-
-    this.soloTimer = setInterval(() => {
-      const now = this.engine.audioCtx.currentTime;
-      if (type === 'drums' && pat.drumGrid) {
-        const sIdx = step % 16;
-        DRUM_INSTRUMENTS.forEach((inst, rIdx) => {
-          if (pat.rowMutes && pat.rowMutes[rIdx]) return;
-          const st = pat.drumGrid[rIdx][sIdx];
-          if (st > 0) {
-            const vel = st === 2 ? 125 : (st === 1 ? 100 : 52);
-            this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, now, 0.14);
-          }
-        });
-      } else if (type === 'bass' && pat.bassSteps) {
-        const stObj = pat.bassSteps[step % 16];
-        if (stObj && !stObj.rest) {
-          const pitch = pat.mode === 'strict'
-            ? (PITCH_TO_MIDI[stObj.pitch] || 33)
-            : (33 + (DEGREE_TO_OFFSET[stObj.degree] || 0));
-          this.midiBridge.sendNoteOn('bass', pitch, stObj.accent ? 120 : 95, now, 0.2);
-        }
-      } else if (type === 'chords' && pat.measures) {
-        if (step % 4 === 0) {
-          const barIdx = Math.floor(step / 16) % pat.measures.length;
-          const m = pat.measures[barIdx];
-          const sym = m[Math.floor(((step % 16) / 16) * m.length)] || 'Am7';
-          this.chordSymbolToMidiNotes(sym).forEach(n => {
-            this.midiBridge.sendNoteOn('chords', n, 90, now, 0.45);
-          });
-        }
-      }
-      step++;
-    }, stepMs);
-
-    this.log(`[EDITOR] Playing solo preview for ${pat.id}`);
-  }
-
-  stopSoloAudition() {
-    if (this.soloTimer) {
-      clearInterval(this.soloTimer);
-      this.soloTimer = null;
-    }
-    ['btn-drum-solo', 'btn-bass-solo', 'btn-chord-solo'].forEach(id => {
-      const btn = document.getElementById(id);
-      if (btn) {
-        btn.textContent = '▶ PLAY SOLO';
-        btn.classList.remove('btn-danger');
-      }
-    });
-  }
-
-  // --- 6. View 3: System Settings Controls ---
-  bindSettingsControls() {
-    const sfFileInput = document.getElementById('sf-file-input');
-    const btnLoadSf = document.getElementById('btn-load-sf');
-    const btnClearSf = document.getElementById('btn-clear-sf');
-    const sliderLimiterThresh = document.getElementById('slider-limiter-thresh');
-    const valLimiterThresh = document.getElementById('val-limiter-thresh');
-    const prefHighContrast = document.getElementById('pref-high-contrast');
-
-    if (btnLoadSf && sfFileInput) {
-      btnLoadSf.addEventListener('click', () => sfFileInput.click());
-      sfFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-        await this.ensureSystemInitialized();
-        try {
-          await this.soundFontManager.loadFromFile(file);
-        } catch (err) {
-          this.log(`[SF2] ERROR loading ${file.name}: ${err.message}`);
-        }
-      });
-    }
-
-    if (btnClearSf) {
-      btnClearSf.addEventListener('click', async () => {
-        await this.ensureSystemInitialized();
-        await this.soundFontManager.clearCache();
-        if (sfFileInput) sfFileInput.value = '';
-      });
-    }
-
-    if (sliderLimiterThresh && valLimiterThresh) {
-      sliderLimiterThresh.addEventListener('input', (e) => {
-        const db = parseFloat(e.target.value).toFixed(1);
-        valLimiterThresh.textContent = `${db} dBFS`;
-        this.soundFontManager.setLimiterThreshold(db);
-      });
-    }
-
-    if (prefHighContrast) {
-      prefHighContrast.addEventListener('change', (e) => {
-        document.body.classList.toggle('high-contrast-stage', e.target.checked);
-        this.log(`[SETTINGS] High Contrast Stage Mode ${e.target.checked ? 'ENABLED' : 'DISABLED'}`);
-      });
-    }
-  }
-
-  // --- 7. Modals (Chords Dictionary, New Pattern, Delete Confirm) ---
-  bindModals() {
-    const dictModal = document.getElementById('modal-chords-dict');
-    const newPatModal = document.getElementById('modal-new-pattern');
-    const delModal = document.getElementById('modal-delete-confirm');
-
-    // Open Chords Dictionary
-    document.querySelectorAll('.btn-open-chords-dict').forEach(btn => {
-      btn.addEventListener('click', () => {
-        dictModal.classList.add('open');
-        this.log('[UI] Opened Chords Dictionary Modal');
-      });
-    });
-
-    // Close modals
-    document.querySelectorAll('[data-close-modal]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = document.getElementById(btn.getAttribute('data-close-modal'));
-        if (target) target.classList.remove('open');
-      });
-    });
-
-    // Open New Pattern Modal
-    const btnNewPattern = document.getElementById('btn-new-pattern');
-    if (btnNewPattern) {
-      btnNewPattern.addEventListener('click', () => {
-        newPatModal.classList.add('open');
-      });
-    }
-
-    // Create New Pattern of chosen type
-    document.querySelectorAll('.btn-create-pattern-type').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const type = btn.getAttribute('data-type');
-        newPatModal.classList.remove('open');
-        this.createNewPattern(type);
-      });
-    });
-
-    // Confirm Delete Pattern
-    const btnConfirmDelete = document.getElementById('btn-confirm-delete-pattern');
-    if (btnConfirmDelete) {
-      btnConfirmDelete.addEventListener('click', () => {
-        if (this.pendingDeletePatternId) {
-          const id = this.pendingDeletePatternId;
-          this.patterns = this.patterns.filter(p => p.id !== id);
-          this.pendingDeletePatternId = null;
-          delModal.classList.remove('open');
-          this.renderPatternLibrary();
-          this.renderPalette();
-          this.renderStageTracks();
-          this.log(`[PATTERNS] Deleted pattern ${id}`);
-        }
-      });
-    }
-  }
-
-  createNewPattern(type) {
-    const prefix = type === 'drums' ? 'D' : (type === 'bass' ? 'B' : 'C');
-    const existingNums = this.patterns
-      .filter(p => p.type === type)
-      .map(p => parseInt(p.id.split('-')[1], 10) || 0);
-    const nextNum = (Math.max(0, ...existingNums) + 1).toString().padStart(2, '0');
-    const newId = `${prefix}-${nextNum}`;
-
-    let newPat;
-    if (type === 'drums') {
-      newPat = {
-        id: newId,
-        type: 'drums',
-        name: `DrumPat ${nextNum}`,
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 1,
-        resolution: '1/16',
-        tension: 25,
-        preset: 0,
-        preview: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-        rowMutes: new Array(10).fill(false),
-        rowSolos: new Array(10).fill(false),
-        drumGrid: DRUM_INSTRUMENTS.map((_, r) =>
-          Array.from({ length: 16 }, (__, s) => (r === 0 && s % 4 === 0 ? 1 : 0))
-        )
-      };
-    } else if (type === 'bass') {
-      newPat = {
-        id: newId,
-        type: 'bass',
-        name: `BassLine ${nextNum}`,
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 1,
-        resolution: '1/16',
-        preset: 33,
-        mode: 'follower',
-        preview: new Array(16).fill(1),
-        bassSteps: Array.from({ length: 16 }, () => ({
-          pitch: 'E1',
-          degree: 'R',
-          gate: 50,
-          accent: false,
-          slide: false,
-          rest: false
-        }))
-      };
-    } else {
-      newPat = {
-        id: newId,
-        type: 'chords',
-        name: `Chords ${nextNum}`,
-        timeSig: '4/4',
-        syncMaster: true,
-        bpm: 120,
-        bars: 4,
-        resolution: '1/1',
-        voicing: 'Jazz Drop-2',
-        preset: 0,
-        tension: 20,
-        preview: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-        measures: [['Cmaj7'], ['Am7'], ['Dm7'], ['G7']]
-      };
-    }
-
-    this.patterns.push(newPat);
-    this.renderPatternLibrary();
-    this.renderPalette();
-    this.log(`[PATTERNS] Created new ${type.toUpperCase()} pattern ${newId}`);
-    this.openEditorForPattern(newId);
-  }
-
-  openDeleteConfirmModal(patternId) {
-    const pat = this.getPatternById(patternId);
-    if (!pat) return;
-    this.pendingDeletePatternId = pat.id;
-    const msgEl = document.getElementById('delete-modal-message');
-    if (msgEl) {
-      msgEl.textContent = `Are you sure you want to delete pattern ${pat.id} (${pat.name})?`;
-    }
-    document.getElementById('modal-delete-confirm').classList.add('open');
-  }
-
-  getPatternById(id) {
-    return this.patterns.find(p => p.id === id) || null;
   }
 }
+Object.assign(AppUI.prototype, AppEditorsMixin, AppSettingsModalsMixin);
 

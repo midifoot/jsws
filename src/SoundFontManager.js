@@ -1,8 +1,10 @@
 /**
- * SoundFontManager.js - AutoBand Offline SoundFont Engine
+ * src/SoundFontManager.js - AutoBand Offline SoundFont Engine
  * Handles IndexedDB binary caching, spessasynth_lib / native SF2 instantiation,
  * preset routing, and master brickwall limiting.
  */
+
+import { DEFAULT_GM_PRESETS } from './defaults.js';
 
 /**
  * Built-in zero-dependency SoundFont2 (RIFF sfbk) Parser & Web Audio Synthesizer.
@@ -13,12 +15,11 @@ class InternalSF2Synth {
     this.audioCtx = audioCtx;
     this.submixNodes = submixNodes;
     this.channelPrograms = new Map([
-      [10, { bank: 128, program: 0 }],
-      [9,  { bank: 128, program: 0 }],
-      [2,  { bank: 0,   program: 33 }],
-      [1,  { bank: 0,   program: 33 }],
-      [3,  { bank: 0,   program: 0 }],
-      [2,  { bank: 0,   program: 33 }]
+      [10, { bank: DEFAULT_GM_PRESETS.rhythm.bank, program: DEFAULT_GM_PRESETS.rhythm.program }],
+      [9,  { bank: DEFAULT_GM_PRESETS.rhythm.bank, program: DEFAULT_GM_PRESETS.rhythm.program }],
+      [2,  { bank: DEFAULT_GM_PRESETS.bass.bank,   program: DEFAULT_GM_PRESETS.bass.program }],
+      [1,  { bank: DEFAULT_GM_PRESETS.bass.bank,   program: DEFAULT_GM_PRESETS.bass.program }],
+      [3,  { bank: DEFAULT_GM_PRESETS.chords.bank, program: DEFAULT_GM_PRESETS.chords.program }]
     ]);
     // Key: `${channel}:${pitch}` -> Array of active voice controllers
     this.activeVoices = new Map();
@@ -305,7 +306,7 @@ class InternalSF2Synth {
     return audioBuf;
   }
 
-  noteOn(channel, pitch, velocity) {
+  noteOn(channel, pitch, velocity, startTime = null, destinationOverride = null) {
     if (!this.audioCtx || velocity <= 0) {
       this.noteOff(channel, pitch);
       return;
@@ -329,7 +330,10 @@ class InternalSF2Synth {
     this.noteOff(channel, pitch);
 
     const matchingVoices = [];
-    const now = this.audioCtx.currentTime;
+    const now = (typeof startTime === 'number' && startTime > this.audioCtx.currentTime)
+      ? startTime
+      : this.audioCtx.currentTime;
+    const targetDest = destinationOverride || this.getDestinationForChannel(channel);
 
     for (const pZone of preset.zones) {
       if (pZone[43] && (pitch < pZone[43].lo || pitch > pZone[43].hi)) continue;
@@ -401,7 +405,7 @@ class InternalSF2Synth {
         envGain.gain.exponentialRampToValueAtTime(sustainLevel, now + attackSecs + decaySecs);
 
         src.connect(envGain);
-        envGain.connect(this.getDestinationForChannel(channel));
+        envGain.connect(targetDest);
         src.start(now);
 
         matchingVoices.push({ src, envGain, releaseSecs, isDrum });
@@ -454,11 +458,11 @@ export class SoundFontManager {
       chords: null
     };
 
-    // Active preset cache
+    // Active preset cache (initialized from centralized src/defaults.js)
     this.activePresets = {
-      rhythm: { bank: 128, program: 0, name: 'Standard Kit' },
-      bass:   { bank: 0,   program: 33, name: 'Electric Bass (Finger)' },
-      chords: { bank: 0,   program: 0,  name: 'Acoustic Grand Piano' }
+      rhythm: { ...DEFAULT_GM_PRESETS.rhythm },
+      bass:   { ...DEFAULT_GM_PRESETS.bass },
+      chords: { ...DEFAULT_GM_PRESETS.chords }
     };
 
     this.onStatusChange = null; // UI callback: (statusText, isReady) => {}
@@ -659,6 +663,39 @@ export class SoundFontManager {
   noteOff(channel, pitch) {
     if (!this.synth || !this.isLoaded) return;
     this.synth.noteOff(channel, pitch);
+  }
+
+  /**
+    * Play a GM Rimshot / Side Stick (Note 37 on Channel 10) for pre-count / metronome ticks
+    * when the SoundFont is loaded. Returns true if triggered, or false to use oscillator fallback.
+    */
+  playRimshotTick(scheduledTime, velocity = 115) {
+    if (!this.synth || !this.isLoaded || !this.audioCtx) return false;
+    const rimPitch = 37; // GM Side Stick / Rimshot
+    const now = this.audioCtx.currentTime;
+    const targetTime = typeof scheduledTime === 'number' ? scheduledTime : now;
+    const msOffset = Math.max(0, (targetTime - now) * 1000);
+
+    if (this.synth instanceof InternalSF2Synth) {
+      const dest = this.limiterNode || this.audioCtx.destination;
+      this.synth.noteOn(10, rimPitch, velocity, targetTime, dest);
+      setTimeout(() => {
+        if (this.synth) this.synth.noteOff(10, rimPitch);
+      }, msOffset + 120);
+      return true;
+    }
+
+    if (msOffset <= 4) {
+      this.synth.noteOn(10, rimPitch, velocity);
+    } else {
+      setTimeout(() => {
+        if (this.synth) this.synth.noteOn(10, rimPitch, velocity);
+      }, msOffset);
+    }
+    setTimeout(() => {
+      if (this.synth) this.synth.noteOff(10, rimPitch);
+    }, msOffset + 120);
+    return true;
   }
 
   // --- Volume & Limiter Controls ---

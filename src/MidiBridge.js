@@ -11,6 +11,14 @@ export class MidiBridge {
             chords: { portId: 'internal', channel: 3 }
         };
 
+        // Respect manual user selection (e.g. choosing Internal .sf2 over macOS IAC Driver)
+        this.forceInternalSf2 = false;
+        this.manualOverrides = {
+            rhythm: false,
+            bass: false,
+            chords: false
+        };
+
         this.onPortsChanged = null;
     }
 
@@ -21,25 +29,25 @@ export class MidiBridge {
     async init() {
         try {
             this.midiAccess = await navigator.requestMIDIAccess();
-            this.updateOutputs();
+            this.updateOutputs(false);
 
             // Listen for hot-plugging MIDI devices
             this.midiAccess.onstatechange = (e) => {
                 if (e.port.type === 'output') {
-                    this.updateOutputs();
+                    this.updateOutputs(false);
                 }
             };
             return true;
         } catch (err) {
             console.warn("Web MIDI API access denied or unsupported.", err);
-            this.updateOutputs();
+            this.updateOutputs(false);
             return false;
         }
     }
 
-    updateOutputs() {
+    updateOutputs(forceAutoRoute = false) {
         this.outputs.clear();
-        this.outputs.set('internal', { name: '🔊 Internal Web Audio / SoundFont Synth', id: 'internal' });
+        this.outputs.set('internal', { name: '🔊 Internal .sf2 / Web Audio Synth', id: 'internal' });
 
         const portList = [];
         if (this.midiAccess) {
@@ -49,20 +57,18 @@ export class MidiBridge {
             }
         }
 
-        this.autoRoute(portList);
-
-        if (this.onPortsChanged) {
-            const diagnostics = {
-                rhythm: this.getRouteInfo('rhythm'),
-                bass: this.getRouteInfo('bass'),
-                chords: this.getRouteInfo('chords'),
-                allPorts: Array.from(this.outputs.values())
-            };
-            this.onPortsChanged(diagnostics);
+        if (this.forceInternalSf2) {
+            this.routing.rhythm.portId = 'internal';
+            this.routing.bass.portId = 'internal';
+            this.routing.chords.portId = 'internal';
+        } else {
+            this.autoRoute(portList, forceAutoRoute);
         }
+
+        this.notifyDiagnostics();
     }
 
-    autoRoute(ports) {
+    autoRoute(ports, forceAutoRoute = false) {
         // Helper to find the first port matching an array of Regex patterns
         const findPort = (regexps) => {
             for (let regex of regexps) {
@@ -75,14 +81,50 @@ export class MidiBridge {
 
         const virtualRegex = /iac|fluidsynth|virtual|loopmidi/i;
 
-        // Rhythm: MPX8/MP8X -> Virtual -> Internal
-        this.routing.rhythm.portId = findPort([/mpx8/i, /mp8x/i, virtualRegex]);
+        // Only auto-route a module if forced, not manually overridden, or its previously selected port disappeared
+        if (forceAutoRoute || !this.manualOverrides.rhythm || !this.outputs.has(this.routing.rhythm.portId)) {
+            this.routing.rhythm.portId = findPort([/mpx8/i, /mp8x/i, virtualRegex]);
+        }
 
-        // Bass: TB3/TB-3 -> Virtual -> Internal
-        this.routing.bass.portId = findPort([/tb-?3/i, virtualRegex]);
+        if (forceAutoRoute || !this.manualOverrides.bass || !this.outputs.has(this.routing.bass.portId)) {
+            this.routing.bass.portId = findPort([/tb-?3/i, virtualRegex]);
+        }
 
-        // Chords: Virtual -> Internal
-        this.routing.chords.portId = findPort([virtualRegex]);
+        if (forceAutoRoute || !this.manualOverrides.chords || !this.outputs.has(this.routing.chords.portId)) {
+            this.routing.chords.portId = findPort([virtualRegex]);
+        }
+    }
+
+    setForceInternal(forceInternal) {
+        this.forceInternalSf2 = Boolean(forceInternal);
+        if (this.forceInternalSf2) {
+            this.routing.rhythm.portId = 'internal';
+            this.routing.bass.portId = 'internal';
+            this.routing.chords.portId = 'internal';
+            this.notifyDiagnostics();
+        } else {
+            this.manualOverrides = { rhythm: false, bass: false, chords: false };
+            this.updateOutputs(true);
+        }
+    }
+
+    rescanAutoRoute() {
+        this.forceInternalSf2 = false;
+        this.manualOverrides = { rhythm: false, bass: false, chords: false };
+        this.updateOutputs(true);
+    }
+
+    notifyDiagnostics() {
+        if (this.onPortsChanged) {
+            const diagnostics = {
+                rhythm: this.getRouteInfo('rhythm'),
+                bass: this.getRouteInfo('bass'),
+                chords: this.getRouteInfo('chords'),
+                forceInternalSf2: this.forceInternalSf2,
+                allPorts: Array.from(this.outputs.values())
+            };
+            this.onPortsChanged(diagnostics);
+        }
     }
 
     getRouteInfo(moduleName) {
@@ -90,17 +132,30 @@ export class MidiBridge {
         const portInfo = this.outputs.get(route.portId);
         return {
             module: moduleName,
+            portId: route.portId,
             portName: portInfo ? portInfo.name : 'Unknown Port',
             channel: route.channel,
             isFallback: route.portId === 'internal'
         };
     }
 
-    setRoute(moduleName, portId, channel) {
+    setRoute(moduleName, portId, channel = null) {
         if (this.routing[moduleName]) {
+            this.manualOverrides[moduleName] = true;
             this.routing[moduleName].portId = portId;
-            this.routing[moduleName].channel = parseInt(channel, 10);
-            this.updateOutputs(); // Re-trigger UI updates
+            if (channel !== null && channel !== undefined) {
+                this.routing[moduleName].channel = parseInt(channel, 10);
+            }
+            if (portId !== 'internal') {
+                this.forceInternalSf2 = false;
+            } else if (
+                this.routing.rhythm.portId === 'internal' &&
+                this.routing.bass.portId === 'internal' &&
+                this.routing.chords.portId === 'internal'
+            ) {
+                // All three are using internal synth
+            }
+            this.notifyDiagnostics();
         }
     }
 
@@ -114,7 +169,7 @@ export class MidiBridge {
         const durationMs = Math.max(10, durationInSeconds * 1000);
 
         // Route 1: Local Browser Audio (SoundFont Engine -> Oscillator Fallback)
-        if (route.portId === 'internal') {
+        if (route.portId === 'internal' || this.forceInternalSf2) {
             if (this.soundFontManager && this.soundFontManager.isLoaded) {
                 if (msOffset <= 4) {
                     this.soundFontManager.noteOn(route.channel, pitch, velocity);
@@ -179,3 +234,4 @@ export class MidiBridge {
         osc.stop(stopTime + 0.02);
     }
 }
+

@@ -11,6 +11,7 @@ export class TimingEngine {
         this.timerID = null;         
         this.startTime = 0;          // Absolute time when Pulse 0 occurs
         this.onPulseCallback = null; 
+        this.onTickCallback = null;  // Optional custom tick (e.g. SF2 Rimshot) with osc fallback
         
         // Precount & Metronome Settings
         this.precountAmount = 4;           // Number of precount pulses
@@ -44,6 +45,11 @@ export class TimingEngine {
         const shouldTick = isPrecount ? this.tickDuringPrecount : this.tickDuringPlayback;
 
         if (shouldTick && this.audioCtx) {
+            // Try SoundFont Rimshot tick first if available; fallback to local oscillator beep
+            if (this.onTickCallback && this.onTickCallback(isPrecount, time, pulseNumber)) {
+                return;
+            }
+
             const osc = this.audioCtx.createOscillator();
             const envelope = this.audioCtx.createGain();
 
@@ -109,3 +115,4 @@ export class TimingEngine {
         return this.audioCtx.currentTime - this.startTime;
     }
 }
+
