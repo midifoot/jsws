@@ -2,6 +2,7 @@ import { AppEditorsMixin } from './AppEditors.js';
 import { AppSettingsModalsMixin } from './AppSettingsModals.js';
 import { chordDictionary } from './theory/ChordDictionary.js';
 import { ChordDictionaryModal } from './ui/ChordDictionaryModal.js';
+import { AudioExporter } from './engine/AudioExporter.js';
 /**
  * src/AppUI.js - AutoBand Front-End UI/UX Controller
  * Manages tab navigation, Main Stage loops/palette/snapshots, Unified Pattern Library,
@@ -452,6 +453,7 @@ export class AppUI {
       dictionary: chordDictionary,
       appUI: this
     });
+    this.audioExporter = new AudioExporter(this);
     chordDictionary.init();
     chordDictionary.subscribe(() => {
       const currentPat = this.getPatternById(this.editingPatternId);

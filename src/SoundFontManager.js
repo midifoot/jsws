@@ -10,7 +10,7 @@ import { DEFAULT_GM_PRESETS } from './defaults.js';
  * Built-in zero-dependency SoundFont2 (RIFF sfbk) Parser & Web Audio Synthesizer.
  * Ensures 100% offline operation when external CDN libraries are unavailable.
  */
-class InternalSF2Synth {
+export class InternalSF2Synth {
   constructor(audioCtx, arrayBuffer, submixNodes = {}) {
     this.audioCtx = audioCtx;
     this.submixNodes = submixNodes;
@@ -387,22 +387,39 @@ class InternalSF2Synth {
           }
         }
 
-        // Volume Envelope & Attenuation
+        // Volume Envelope & Attenuation (with SF2 Hold + Preset offsets + true sustain resonance)
         const attenCb = (iZone[48] ? iZone[48].sAmount : 0) + (pZone[48] ? pZone[48].sAmount : 0);
         const attenLinear = Math.pow(10, -Math.max(0, attenCb) / 200);
         const velGain = Math.pow(velocity / 127, 1.5);
         const peakGain = Math.min(1.0, velGain * attenLinear);
 
-        const attackSecs = Math.max(0.002, iZone[34] ? this.timecentsToSeconds(iZone[34].sAmount) : 0.003);
-        const decaySecs = Math.max(0.01, iZone[36] ? this.timecentsToSeconds(iZone[36].sAmount) : 0.5);
-        const sustainCb = Math.max(0, iZone[37] ? iZone[37].sAmount : 0);
-        const sustainLevel = Math.max(0.001, peakGain * Math.pow(10, -sustainCb / 200));
-        const releaseSecs = Math.min(3.0, Math.max(0.02, iZone[38] ? this.timecentsToSeconds(iZone[38].sAmount) : (isDrum ? 0.25 : 0.15)));
+        const attackTc = (iZone[34] ? iZone[34].sAmount : -12000) + (pZone[34] ? pZone[34].sAmount : 0);
+        const holdTc   = (iZone[35] ? iZone[35].sAmount : -12000) + (pZone[35] ? pZone[35].sAmount : 0);
+        const decayTc  = (iZone[36] ? iZone[36].sAmount : 1200)   + (pZone[36] ? pZone[36].sAmount : 0);
+        const relTc    = (iZone[38] ? iZone[38].sAmount : -1200)  + (pZone[38] ? pZone[38].sAmount : 0);
+
+        const attackSecs = Math.max(0.002, iZone[34] ? this.timecentsToSeconds(attackTc) : 0.003);
+        const holdSecs = iZone[35] ? Math.max(0, this.timecentsToSeconds(holdTc)) : 0;
+        const rawDecaySecs = iZone[36] ? this.timecentsToSeconds(decayTc) : (channel === 3 ? 4.5 : 1.8);
+        const decaySecs = channel === 3 ? Math.max(3.2, rawDecaySecs) : Math.max(0.15, rawDecaySecs);
+
+        const sustainCb = Math.max(0, (iZone[37] ? iZone[37].sAmount : 0) + (pZone[37] ? pZone[37].sAmount : 0));
+        // In SF2, sustainCb is in 0.1 dB (200 = -20 dB). Keep a musical sustain floor so chords resonate naturally
+        const rawSustain = peakGain * Math.pow(10, -sustainCb / 200);
+        const sustainLevel = channel === 3
+          ? Math.max(peakGain * 0.35, rawSustain)
+          : Math.max(0.001, rawSustain);
+
+        const rawRelSecs = iZone[38] ? this.timecentsToSeconds(relTc) : (isDrum ? 0.3 : (channel === 3 ? 0.55 : 0.2));
+        const releaseSecs = Math.min(3.5, Math.max(channel === 3 ? 0.45 : 0.04, rawRelSecs));
 
         const envGain = this.audioCtx.createGain();
         envGain.gain.setValueAtTime(0.0001, now);
         envGain.gain.linearRampToValueAtTime(peakGain, now + attackSecs);
-        envGain.gain.exponentialRampToValueAtTime(sustainLevel, now + attackSecs + decaySecs);
+        if (holdSecs > 0.005) {
+          envGain.gain.setValueAtTime(peakGain, now + attackSecs + holdSecs);
+        }
+        envGain.gain.exponentialRampToValueAtTime(sustainLevel, now + attackSecs + holdSecs + decaySecs);
 
         src.connect(envGain);
         envGain.connect(targetDest);
@@ -435,6 +452,146 @@ class InternalSF2Synth {
         v.src.stop(now + rel + 0.02);
       } catch (_) {
         // Ignore already-stopped nodes
+      }
+    }
+  }
+
+  /**
+   * Sample-accurate offline note scheduling for OfflineAudioContext bounces.
+   * Schedules attack, decay, sustain, release, and buffer stop directly on the timeline.
+   */
+  scheduleNote(channel, pitch, velocity, startTime = 0, durationSeconds = 0.25, destinationOverride = null) {
+    if (!this.audioCtx || velocity <= 0) return;
+
+    const isDrum = channel === 10 || channel === 9;
+    const chProg = this.channelPrograms.get(channel) || {
+      bank: isDrum ? 128 : 0,
+      program: 0
+    };
+
+    let preset = this.presets.get(`${chProg.bank}:${chProg.program}`);
+    if (!preset && isDrum) {
+      preset = this.presets.get('128:0');
+    } else if (!preset) {
+      preset = this.presets.get('0:0');
+    }
+    if (!preset) return;
+
+    const t0 = Math.max(0, Number(startTime) || 0);
+    const dur = Math.max(0.03, Number(durationSeconds) || 0.2);
+    const targetDest = destinationOverride || this.getDestinationForChannel(channel);
+    let layerCount = 0;
+
+    for (const pZone of preset.zones) {
+      if (pZone[43] && (pitch < pZone[43].lo || pitch > pZone[43].hi)) continue;
+      if (pZone[44] && (velocity < pZone[44].lo || velocity > pZone[44].hi)) continue;
+
+      const instIdx = pZone[41] ? pZone[41].uAmount : -1;
+      const inst = this.instruments[instIdx];
+      if (!inst) continue;
+
+      for (const iZone of inst.zones) {
+        if (iZone[43] && (pitch < iZone[43].lo || pitch > iZone[43].hi)) continue;
+        if (iZone[44] && (velocity < iZone[44].lo || velocity > iZone[44].hi)) continue;
+
+        const sampleIdx = iZone[53] ? iZone[53].uAmount : -1;
+        const sample = this.samples[sampleIdx];
+        if (!sample || (sample.sampleType & 0x8000)) continue;
+
+        const startOffset = (iZone[0] ? iZone[0].sAmount : 0) + (iZone[4] ? iZone[4].sAmount * 32768 : 0);
+        const endOffset = (iZone[1] ? iZone[1].sAmount : 0) + (iZone[12] ? iZone[12].sAmount * 32768 : 0);
+        const audioBuf = this.getSampleAudioBuffer(sampleIdx, startOffset, endOffset);
+        if (!audioBuf) continue;
+
+        const rootKey = (iZone[58] && iZone[58].sAmount >= 0 && iZone[58].sAmount <= 127)
+          ? iZone[58].sAmount
+          : (sample.originalPitch <= 127 ? sample.originalPitch : 60);
+
+        const scaleTuning = iZone[56] ? iZone[56].sAmount : 100;
+        const coarseTune = (iZone[51] ? iZone[51].sAmount : 0) + (pZone[51] ? pZone[51].sAmount : 0);
+        const fineTune = (iZone[52] ? iZone[52].sAmount : 0) + (pZone[52] ? pZone[52].sAmount : 0) + (sample.pitchCorrection || 0);
+
+        const totalCents = (pitch - rootKey) * scaleTuning + (coarseTune * 100) + fineTune;
+        const playbackRate = Math.pow(2, totalCents / 1200);
+
+        const sampleModes = iZone[54] ? (iZone[54].uAmount & 3) : 0;
+        const isLooped = sampleModes === 1 || sampleModes === 3;
+
+        const src = this.audioCtx.createBufferSource();
+        src.buffer = audioBuf;
+        src.playbackRate.setValueAtTime(playbackRate, t0);
+
+        if (isLooped) {
+          const loopStartOffset = (iZone[2] ? iZone[2].sAmount : 0) + (iZone[45] ? iZone[45].sAmount * 32768 : 0);
+          const loopEndOffset = (iZone[3] ? iZone[3].sAmount : 0) + (iZone[50] ? iZone[50].sAmount * 32768 : 0);
+          const relLoopStart = Math.max(0, (sample.startLoop + loopStartOffset) - (sample.start + startOffset));
+          const relLoopEnd = Math.max(relLoopStart, (sample.endLoop + loopEndOffset) - (sample.start + startOffset));
+
+          if (relLoopEnd > relLoopStart && relLoopEnd <= audioBuf.length) {
+            src.loop = true;
+            src.loopStart = relLoopStart / audioBuf.sampleRate;
+            src.loopEnd = relLoopEnd / audioBuf.sampleRate;
+          }
+        }
+
+        const attenCb = (iZone[48] ? iZone[48].sAmount : 0) + (pZone[48] ? pZone[48].sAmount : 0);
+        const attenLinear = Math.pow(10, -Math.max(0, attenCb) / 200);
+        const velGain = Math.pow(velocity / 127, 1.5);
+        const peakGain = Math.min(1.0, velGain * attenLinear);
+
+        const isChord = channel === 3;
+        const attackTc = (iZone[34] ? iZone[34].sAmount : -12000) + (pZone[34] ? pZone[34].sAmount : 0);
+        const holdTc = (iZone[35] ? iZone[35].sAmount : -12000) + (pZone[35] ? pZone[35].sAmount : 0);
+        const decayTc = (iZone[36] ? iZone[36].sAmount : 1200) + (pZone[36] ? pZone[36].sAmount : 0);
+        const sustainCb = Math.max(0, (iZone[37] ? iZone[37].sAmount : 0) + (pZone[37] ? pZone[37].sAmount : 0));
+        const releaseTc = (iZone[38] ? iZone[38].sAmount : -1800) + (pZone[38] ? pZone[38].sAmount : 0);
+
+        const attackSecs = Math.max(0.002, this.timecentsToSeconds(attackTc));
+        const holdSecs = Math.max(0, this.timecentsToSeconds(holdTc));
+        const rawDecaySecs = Math.max(0.01, this.timecentsToSeconds(decayTc));
+        const decaySecs = isChord ? Math.max(3.2, rawDecaySecs) : rawDecaySecs;
+        const rawSustain = Math.max(0.001, peakGain * Math.pow(10, -sustainCb / 200));
+        // Ensure chord presets maintain warm harmonic body throughout held steps
+        const sustainLevel = isChord ? Math.max(peakGain * 0.42, rawSustain) : rawSustain;
+        const rawReleaseSecs = Math.min(2.5, Math.max(0.03, iZone[38] ? this.timecentsToSeconds(releaseTc) : (isDrum ? 0.32 : 0.25)));
+        const releaseSecs = isChord ? Math.max(0.50, rawReleaseSecs) : rawReleaseSecs;
+
+        const noteOffTime = isDrum ? Math.max(t0 + dur, t0 + 0.22) : Math.max(t0 + attackSecs + 0.02, t0 + dur);
+        const stopTime = noteOffTime + releaseSecs;
+
+        const envGain = this.audioCtx.createGain();
+        envGain.gain.setValueAtTime(0.0001, t0);
+
+        const tAttackEnd = t0 + attackSecs;
+        envGain.gain.linearRampToValueAtTime(peakGain, tAttackEnd);
+
+        const tHoldEnd = Math.min(noteOffTime, tAttackEnd + holdSecs);
+        if (tHoldEnd > tAttackEnd) {
+          envGain.gain.setValueAtTime(peakGain, tHoldEnd);
+        }
+
+        // Schedule decay and noteOff strictly in chronological order so Web Audio
+        // never overwrites an ongoing decay ramp with an earlier release ramp
+        const tDecayEnd = tHoldEnd + decaySecs;
+        if (noteOffTime < tDecayEnd) {
+          const frac = Math.max(0, Math.min(1, (noteOffTime - tHoldEnd) / decaySecs));
+          const gainAtNoteOff = Math.max(0.001, peakGain * Math.pow(sustainLevel / Math.max(0.0001, peakGain), frac));
+          envGain.gain.exponentialRampToValueAtTime(gainAtNoteOff, noteOffTime);
+        } else {
+          envGain.gain.exponentialRampToValueAtTime(sustainLevel, tDecayEnd);
+          if (noteOffTime > tDecayEnd) {
+            envGain.gain.setValueAtTime(sustainLevel, noteOffTime);
+          }
+        }
+        envGain.gain.exponentialRampToValueAtTime(0.0001, stopTime);
+
+        src.connect(envGain);
+        envGain.connect(targetDest);
+        src.start(t0);
+        src.stop(stopTime + 0.02);
+
+        layerCount++;
+        if (layerCount >= 4) break;
       }
     }
   }
@@ -593,6 +750,7 @@ export class SoundFontManager {
   }
 
   async parseAndMountSoundFont(arrayBuffer) {
+    this.rawSf2Buffer = arrayBuffer;
     this.initAudioGraph();
     if (this.onStatusChange) this.onStatusChange('Parsing SoundFont binary into Web Audio synth...', false);
 

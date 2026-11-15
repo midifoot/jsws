@@ -442,6 +442,120 @@ export const AppSettingsModalsMixin = {
         }
       });
     }
+
+    // Audio Export Buttons (Main Stage Full Bounce + Drum / Bass / Chord Stem Bounce)
+    const btnExportStage = document.getElementById('btn-export-stage-audio');
+    if (btnExportStage) {
+      btnExportStage.addEventListener('click', () => {
+        this.openAudioExportModal('stage', null);
+      });
+    }
+
+    ['btn-drum-export', 'btn-bass-export', 'btn-chord-export'].forEach((btnId) => {
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const pat = this.getPatternById(this.editingPatternId);
+          if (pat) {
+            this.openAudioExportModal('stem', pat);
+          }
+        });
+      }
+    });
+
+    const btnStartBounce = document.getElementById('btn-start-audio-bounce');
+    if (btnStartBounce) {
+      btnStartBounce.addEventListener('click', async () => {
+        if (!this.audioExporter || this._isExportingAudio) return;
+        this._isExportingAudio = true;
+        btnStartBounce.disabled = true;
+
+        const fmtEl = document.getElementById('export-audio-format');
+        const barsEl = document.getElementById('export-audio-bars');
+        const progWrap = document.getElementById('export-progress-wrap');
+        const progStatus = document.getElementById('export-progress-status');
+        const progPct = document.getElementById('export-progress-pct');
+        const progBar = document.getElementById('export-progress-bar');
+
+        const format = (fmtEl && fmtEl.value) || 'wav';
+        const barsVal = parseInt((barsEl && barsEl.value) || '4', 10) || 4;
+
+        if (progWrap) progWrap.style.display = 'flex';
+        const updateProgress = (pct, msg) => {
+          if (progStatus) progStatus.textContent = msg || `Rendering audio... ${pct}%`;
+          if (progPct) progPct.textContent = `${pct}%`;
+          if (progBar) progBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        };
+
+        try {
+          updateProgress(2, 'Initializing OfflineAudioContext...');
+          let result;
+          if (this._exportTargetType === 'stem' && this._exportTargetPattern) {
+            result = await this.audioExporter.bouncePatternStem(this._exportTargetPattern, {
+              loops: barsVal,
+              format,
+              onProgress: updateProgress
+            });
+          } else {
+            result = await this.audioExporter.bounceMainStage({
+              bars: barsVal,
+              format,
+              onProgress: updateProgress
+            });
+          }
+          const kb = (result.sizeBytes / 1024).toFixed(1);
+          this.log(`[AUDIO EXPORT] 💾 Bounced ${result.filename} (${kb} KB)`);
+        } catch (err) {
+          updateProgress(0, `Export error: ${err.message}`);
+          this.log(`[AUDIO EXPORT] ⚠️ Failed: ${err.message}`);
+        } finally {
+          this._isExportingAudio = false;
+          btnStartBounce.disabled = false;
+        }
+      });
+    }
+  },
+
+  openAudioExportModal(targetType = 'stage', pattern = null) {
+    const modal = document.getElementById('modal-audio-export');
+    if (!modal) return;
+
+    this._exportTargetType = targetType;
+    this._exportTargetPattern = pattern;
+
+    const titleEl = document.getElementById('export-modal-title');
+    const descEl = document.getElementById('export-modal-target-desc');
+    const lenLabelEl = document.getElementById('export-length-label');
+    const hwNoticeEl = document.getElementById('export-midi-hw-notice');
+    const progWrap = document.getElementById('export-progress-wrap');
+
+    if (progWrap) progWrap.style.display = 'none';
+
+    if (targetType === 'stem' && pattern) {
+      if (titleEl) titleEl.textContent = `EXPORT STEM AUDIO 💾 (${pattern.id})`;
+      if (descEl) {
+        descEl.textContent = `Target: Pattern Stem "${pattern.id} ${pattern.name}" (${pattern.timeSig} @ ${this.engine.tempo} BPM)`;
+      }
+      if (lenLabelEl) lenLabelEl.textContent = 'Loop Repetitions';
+    } else {
+      const snapSelect = document.getElementById('snapshot-select');
+      const snapName = (snapSelect && snapSelect.value) || 'Main Stage';
+      if (titleEl) titleEl.textContent = 'EXPORT MAIN STAGE AUDIO 💾';
+      if (descEl) {
+        descEl.textContent = `Target: Full Trio Arrangement — "${snapName}" (${this.engine.tempo} BPM)`;
+      }
+      if (lenLabelEl) lenLabelEl.textContent = 'Duration (Master Bars)';
+    }
+
+    if (hwNoticeEl && this.audioExporter) {
+      const hasExternal = this.audioExporter.hasExternalMidiRoutes();
+      hwNoticeEl.style.display = hasExternal ? 'block' : 'none';
+      if (hasExternal) {
+        this.log('[AUDIO EXPORT] Notice: External MIDI hardware ports cannot be captured in offline bounce. Outputting internal SoundFont audio.');
+      }
+    }
+
+    modal.classList.add('open');
   },
 
   createNewPattern(type) {

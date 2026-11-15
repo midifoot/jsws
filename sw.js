@@ -1,4 +1,4 @@
-const CACHE_NAME = 'autoband-core-v16';
+const CACHE_NAME = 'autoband-core-v19';
 
 const CORE_ASSETS = [
   './',
@@ -10,6 +10,8 @@ const CORE_ASSETS = [
   './src/theory/defaultChords.json',
   './src/theory/ChordDictionary.js',
   './src/ui/ChordDictionaryModal.js',
+  './src/vendor/lame.min.js',
+  './src/engine/AudioExporter.js',
   './src/TimingEngine.js',
   './src/MidiBridge.js',
   './src/SoundFontManager.js',
@@ -56,7 +58,11 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+        if (
+          !networkResponse ||
+          networkResponse.status !== 200 ||
+          (networkResponse.type !== 'basic' && networkResponse.type !== 'cors')
+        ) {
           return networkResponse;
         }
         const responseToCache = networkResponse.clone();

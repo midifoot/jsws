@@ -111,6 +111,7 @@
               <option value="Verse Groove">Verse Groove</option>
               <option value="Chorus Lift">Chorus Lift</option>
             </select>
+            <button id="btn-export-stage-audio" class="btn btn-gold" title="Bounce full Main Stage performance to .WAV or .MP3">EXPORT AUDIO 💾</button>
           </div>
         </div>
       </div>
@@ -316,8 +317,8 @@
             </div>
           </div>
 
-          <div class="ctrl-field" style="margin-left: auto;">
-            <span class="card-section-label">Audition</span>
+          <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
+            <button id="btn-drum-export" class="btn btn-gold" title="Bounce this Drum Pattern stem to .WAV or .MP3">EXPORT AUDIO 💾</button>
             <button id="btn-drum-solo" class="btn btn-green">▶ PLAY SOLO</button>
           </div>
         </div>
@@ -445,6 +446,7 @@
 
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
             <button id="btn-rehearsal-mute-bass" class="btn-rehearsal-mute" title="Silence bass track to practice on physical bass">MUTE BASS</button>
+            <button id="btn-bass-export" class="btn btn-gold" title="Bounce this Bassline Pattern stem to .WAV or .MP3">EXPORT AUDIO 💾</button>
             <button id="btn-bass-solo" class="btn btn-green">▶ PLAY SOLO</button>
           </div>
         </div>
@@ -557,6 +559,7 @@
 
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
             <button class="btn btn-gold btn-open-chords-dict">CHORDS DICTIONARY</button>
+            <button id="btn-chord-export" class="btn btn-gold" title="Bounce this Chord Progression stem to .WAV or .MP3">EXPORT AUDIO 💾</button>
             <button id="btn-chord-solo" class="btn btn-green">▶ PLAY SOLO</button>
           </div>
         </div>
@@ -934,6 +937,61 @@
         <div style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 1.25rem;">
           <button class="btn" data-close-modal="modal-overwrite-snapshot">CANCEL</button>
           <button id="btn-confirm-overwrite-snapshot" class="btn btn-gold">OVERWRITE SNAPSHOT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Offline Audio Export (.WAV / .MP3) & Progress Dialog -->
+  <div id="modal-audio-export" class="modal-backdrop">
+    <div class="modal-dialog" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="export-modal-title" style="color: var(--color-chords);">EXPORT AUDIO BOUNCE 💾</h3>
+        <button class="btn" id="btn-close-export-modal" data-close-modal="modal-audio-export">✕</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.9rem;">
+        <div id="export-modal-target-desc" style="font-size: 0.86rem; color: var(--color-text-primary); font-weight: 600;">
+          Target: Main Stage Full Arrangement
+        </div>
+
+        <!-- External MIDI Hardware Notice (shown automatically when any track is routed to external MIDI) -->
+        <div id="export-midi-hw-notice" style="display: none; background: rgba(255, 170, 0, 0.12); border: 1px solid var(--color-chords); border-radius: 6px; padding: 0.65rem 0.8rem; font-size: 0.8rem; color: #ffd27a; line-height: 1.4;">
+          ⚠️ <strong>External MIDI Notice:</strong> External MIDI hardware ports cannot be captured in offline bounce. Outputting internal SoundFont audio.
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="ctrl-field">
+            <span class="card-section-label">Audio Format</span>
+            <select id="export-audio-format" style="height: 34px; font-weight: 700;">
+              <option value="wav" selected>WAV (16-Bit Stereo PCM)</option>
+              <option value="mp3">MP3 (192 kbps via Web Worker)</option>
+            </select>
+          </div>
+          <div class="ctrl-field">
+            <span class="card-section-label" id="export-length-label">Duration (Master Bars)</span>
+            <select id="export-audio-bars" style="height: 34px; font-weight: 700;">
+              <option value="2">2 Bars / Loops</option>
+              <option value="4" selected>4 Bars / Loops</option>
+              <option value="8">8 Bars / Loops</option>
+              <option value="16">16 Bars / Loops</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Progress Bar & Status Readout -->
+        <div id="export-progress-wrap" style="display: none; flex-direction: column; gap: 0.4rem; background: #0d1017; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle);">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-family: var(--font-mono);">
+            <span id="export-progress-status" style="color: var(--color-drums);">Rendering audio... 0%</span>
+            <span id="export-progress-pct" style="color: var(--color-chords); font-weight: 800;">0%</span>
+          </div>
+          <div style="width: 100%; height: 10px; background: #1a1f2c; border-radius: 999px; overflow: hidden;">
+            <div id="export-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--color-drums), var(--color-chords)); transition: width 0.15s ease;"></div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.65rem; margin-top: 0.4rem;">
+          <button class="btn" data-close-modal="modal-audio-export" id="btn-cancel-export-modal">CLOSE</button>
+          <button id="btn-start-audio-bounce" class="btn btn-green">💾 RENDER &amp; DOWNLOAD</button>
         </div>
       </div>
     </div>
