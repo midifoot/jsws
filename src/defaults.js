@@ -273,6 +273,7 @@ export function createDefaultPatterns() {
       bars: 1,
       resolution: '1/16',
       beatSep: 4,
+      humanize: 0,
       preset: 32,
       preview: [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1],
       rowMutes: new Array(10).fill(false),
@@ -289,6 +290,7 @@ export function createDefaultPatterns() {
       bars: 1,
       resolution: '1/8',
       beatSep: 2,
+      humanize: 0,
       preset: 32,
       preview: [1, 1, 1, 1, 1, 1, 1],
       rowMutes: new Array(10).fill(false),
@@ -305,6 +307,7 @@ export function createDefaultPatterns() {
       bars: 1,
       resolution: '1/8T',
       beatSep: 3,
+      humanize: 0,
       preset: 32,
       preview: [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1],
       rowMutes: new Array(10).fill(false),
@@ -321,6 +324,7 @@ export function createDefaultPatterns() {
       bars: 1,
       resolution: '1/8T',
       beatSep: 3,
+      humanize: 0,
       preset: 33,
       mode: 'follower',
       preview: [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1],
@@ -336,6 +340,7 @@ export function createDefaultPatterns() {
       bars: 1,
       resolution: '1/16',
       beatSep: 4,
+      humanize: 0,
       preset: 36,
       mode: 'strict',
       preview: [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0],
@@ -351,6 +356,7 @@ export function createDefaultPatterns() {
       bars: 1,
       resolution: '1/8',
       beatSep: 2,
+      humanize: 0,
       preset: 38,
       mode: 'follower',
       preview: [1, 1, 1, 1, 1, 1, 1, 1],
@@ -367,6 +373,7 @@ export function createDefaultPatterns() {
       resolution: '1/2',
       voicing: 'Jazz Drop-2',
       octave: 0,
+      humanize: 0,
       preset: 4,
       preview: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
       measures: [
@@ -387,6 +394,7 @@ export function createDefaultPatterns() {
       resolution: '1/1',
       voicing: 'Quartal Open',
       octave: 0,
+      humanize: 0,
       preset: 4,
       preview: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
       measures: [
@@ -407,6 +415,7 @@ export function createDefaultPatterns() {
       resolution: '1/4',
       voicing: 'Lush Pad',
       octave: 0,
+      humanize: 0,
       preset: 4,
       preview: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
       measures: [
@@ -444,6 +453,7 @@ export function createDefaultSnapshots() {
     'Snapshot 1 (Default)': {
       tempo: 120,
       drumSlots: DEFAULT_DRUM_SLOTS.map(s => ({ ...s })),
+      trackHumanize: { drums: 0, bass: 0, chords: 0 },
       tracks: {
         drums: DEFAULT_TRACK_SLOTS.drums.map(s => ({ ...s })),
         bass: DEFAULT_TRACK_SLOTS.bass.map(s => ({ ...s })),
@@ -453,6 +463,7 @@ export function createDefaultSnapshots() {
     'Verse Groove': {
       tempo: 112,
       drumSlots: DEFAULT_DRUM_SLOTS.map(s => ({ ...s })),
+      trackHumanize: { drums: 0, bass: 0, chords: 0 },
       tracks: {
         drums: [{ patternId: 'D-03', tension: 0 }, { patternId: 'D-03', tension: 0 }],
         bass: [{ patternId: 'B-01', tension: 0 }, { patternId: 'B-01', tension: 1 }],
@@ -464,6 +475,7 @@ export function createDefaultSnapshots() {
       drumSlots: DEFAULT_DRUM_SLOTS.map((s, idx) =>
         idx === 6 ? { code: 'CYM', label: 'Crash Cymbal 1', pitch: 49 } : { ...s }
       ),
+      trackHumanize: { drums: 0, bass: 0, chords: 0 },
       tracks: {
         drums: [
           { patternId: 'D-01', tension: 2 },

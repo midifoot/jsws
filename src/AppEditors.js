@@ -207,6 +207,8 @@ export const AppEditorsMixin = {
       pat.bars = parseInt(document.getElementById('drum-ed-bars').textContent, 10) || 1;
       pat.resolution = document.getElementById('drum-ed-res').value;
       pat.beatSep = Math.max(1, Math.min(9, parseInt(document.getElementById('drum-ed-beatsep').value, 10) || 4));
+      const drumHumEl = document.getElementById('drum-ed-humanize');
+      pat.humanize = drumHumEl ? Math.max(0, Math.min(100, parseInt(drumHumEl.value, 10) || 0)) : (pat.humanize || 0);
       const total = this.getTotalSteps(pat);
       pat.preview = pat.drumGrid[0].slice(0, Math.min(24, total)).map((v, i) =>
         (v > 0 || (pat.drumGrid[1] && pat.drumGrid[1][i] > 0) || (pat.drumGrid[2] && pat.drumGrid[2][i] > 0) ? 1 : 0)
@@ -223,6 +225,8 @@ export const AppEditorsMixin = {
       pat.bars = parseInt(document.getElementById('bass-ed-bars').textContent, 10) || 1;
       pat.resolution = document.getElementById('bass-ed-res').value;
       pat.beatSep = Math.max(1, Math.min(9, parseInt(document.getElementById('bass-ed-beatsep').value, 10) || 4));
+      const bassHumEl = document.getElementById('bass-ed-humanize');
+      pat.humanize = bassHumEl ? Math.max(0, Math.min(100, parseInt(bassHumEl.value, 10) || 0)) : (pat.humanize || 0);
       const total = this.getTotalSteps(pat);
       pat.preview = pat.bassSteps.slice(0, Math.min(24, total)).map(s => (s.rest ? 0 : 1));
     } else if (pat.type === 'chords') {
@@ -238,6 +242,8 @@ export const AppEditorsMixin = {
       pat.resolution = this.getChordPatternResolutionSummary(pat);
       pat.voicing = document.getElementById('chord-ed-voicing').value;
       pat.octave = Math.max(-4, Math.min(4, parseInt(document.getElementById('chord-ed-octave').value, 10) || 0));
+      const chordHumEl = document.getElementById('chord-ed-humanize');
+      pat.humanize = chordHumEl ? Math.max(0, Math.min(100, parseInt(chordHumEl.value, 10) || 0)) : (pat.humanize || 0);
     }
 
     this.saveWorkspaceToLocalStorage();
@@ -364,6 +370,18 @@ export const AppEditorsMixin = {
     soloBtn.addEventListener('click', () => {
       this.toggleSoloAudition('drums', soloBtn);
     });
+
+    const drumHumSlider = document.getElementById('drum-ed-humanize-slider');
+    const drumHumNum = document.getElementById('drum-ed-humanize');
+    const syncDrumHum = (val) => {
+      const clamped = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      if (drumHumSlider) drumHumSlider.value = String(clamped);
+      if (drumHumNum) drumHumNum.value = String(clamped);
+      const pat = this.getPatternById(this.editingPatternId);
+      if (pat) pat.humanize = clamped;
+    };
+    if (drumHumSlider) drumHumSlider.addEventListener('input', (e) => syncDrumHum(e.target.value));
+    if (drumHumNum) drumHumNum.addEventListener('input', (e) => syncDrumHum(e.target.value));
   },
 
   populateDrumEditor(pat) {
@@ -391,6 +409,12 @@ export const AppEditorsMixin = {
     pat.beatSep = beatSep;
     const beatSepEl = document.getElementById('drum-ed-beatsep');
     if (beatSepEl) beatSepEl.value = String(beatSep);
+
+    const drumHumVal = Math.max(0, Math.min(100, parseInt(pat.humanize, 10) || 0));
+    const drumHumSlider = document.getElementById('drum-ed-humanize-slider');
+    const drumHumNum = document.getElementById('drum-ed-humanize');
+    if (drumHumSlider) drumHumSlider.value = String(drumHumVal);
+    if (drumHumNum) drumHumNum.value = String(drumHumVal);
 
     this.renderDrumMatrix(pat);
   },
@@ -639,6 +663,18 @@ export const AppEditorsMixin = {
     soloBtn.addEventListener('click', () => {
       this.toggleSoloAudition('bass', soloBtn);
     });
+
+    const bassHumSlider = document.getElementById('bass-ed-humanize-slider');
+    const bassHumNum = document.getElementById('bass-ed-humanize');
+    const syncBassHum = (val) => {
+      const clamped = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      if (bassHumSlider) bassHumSlider.value = String(clamped);
+      if (bassHumNum) bassHumNum.value = String(clamped);
+      const pat = this.getPatternById(this.editingPatternId);
+      if (pat) pat.humanize = clamped;
+    };
+    if (bassHumSlider) bassHumSlider.addEventListener('input', (e) => syncBassHum(e.target.value));
+    if (bassHumNum) bassHumNum.addEventListener('input', (e) => syncBassHum(e.target.value));
   },
 
   populateBassEditor(pat) {
@@ -673,6 +709,12 @@ export const AppEditorsMixin = {
     const isStrict = pat.mode === 'strict';
     document.getElementById('bass-mode-strict').classList.toggle('active', isStrict);
     document.getElementById('bass-mode-follower').classList.toggle('active', !isStrict);
+
+    const bassHumVal = Math.max(0, Math.min(100, parseInt(pat.humanize, 10) || 0));
+    const bassHumSlider = document.getElementById('bass-ed-humanize-slider');
+    const bassHumNum = document.getElementById('bass-ed-humanize');
+    if (bassHumSlider) bassHumSlider.value = String(bassHumVal);
+    if (bassHumNum) bassHumNum.value = String(bassHumVal);
 
     const rehearsalMuteBtn = document.getElementById('btn-rehearsal-mute-bass');
     rehearsalMuteBtn.classList.toggle('active', this.tracks.bass.muted);
@@ -985,6 +1027,18 @@ export const AppEditorsMixin = {
     soloBtn.addEventListener('click', () => {
       this.toggleSoloAudition('chords', soloBtn);
     });
+
+    const chordHumSlider = document.getElementById('chord-ed-humanize-slider');
+    const chordHumNum = document.getElementById('chord-ed-humanize');
+    const syncChordHum = (val) => {
+      const clamped = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      if (chordHumSlider) chordHumSlider.value = String(clamped);
+      if (chordHumNum) chordHumNum.value = String(clamped);
+      const pat = this.getPatternById(this.editingPatternId);
+      if (pat) pat.humanize = clamped;
+    };
+    if (chordHumSlider) chordHumSlider.addEventListener('input', (e) => syncChordHum(e.target.value));
+    if (chordHumNum) chordHumNum.addEventListener('input', (e) => syncChordHum(e.target.value));
   },
 
   populateChordEditor(pat) {
@@ -1013,6 +1067,12 @@ export const AppEditorsMixin = {
     const octEl = document.getElementById('chord-ed-octave');
     if (octEl) octEl.value = String(pat.octave || 0);
     document.getElementById('chord-ed-preset').value = pat.preset !== undefined ? pat.preset : DEFAULT_GM_PRESETS.chords.program;
+
+    const chordHumVal = Math.max(0, Math.min(100, parseInt(pat.humanize, 10) || 0));
+    const chordHumSlider = document.getElementById('chord-ed-humanize-slider');
+    const chordHumNum = document.getElementById('chord-ed-humanize');
+    if (chordHumSlider) chordHumSlider.value = String(chordHumVal);
+    if (chordHumNum) chordHumNum.value = String(chordHumVal);
 
     this.renderChordMeasuresGrid(pat);
   },
@@ -1261,7 +1321,7 @@ export const AppEditorsMixin = {
           const st = pat.drumGrid[rIdx] && pat.drumGrid[rIdx][sIdx];
           if (st > 0) {
             const vel = this.getDrumStepVelocity(st);
-            this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, now, 0.14);
+            this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, now, 0.14, pat.humanize || 0);
           }
         });
       } else if (type === 'bass' && pat.bassSteps) {
@@ -1271,7 +1331,7 @@ export const AppEditorsMixin = {
           const pitch = pat.mode === 'strict'
             ? (PITCH_TO_MIDI[stObj.pitch] || 33)
             : (33 + (DEGREE_TO_OFFSET[stObj.degree] || 0));
-          this.midiBridge.sendNoteOn('bass', pitch, stObj.accent ? 120 : 95, now, 0.2);
+          this.midiBridge.sendNoteOn('bass', pitch, stObj.accent ? 120 : 95, now, 0.2, pat.humanize || 0);
         }
       } else if (type === 'chords' && pat.measures && pat.measures.length > 0) {
         const barIdx = Math.floor(sIdx / stepsPerChordBar) % pat.measures.length;
@@ -1289,7 +1349,7 @@ export const AppEditorsMixin = {
           if (!this.isSilentChordSymbol(sym)) {
             const dur = Math.max(0.35, (60 / activeBpm) * (chordUpper / chordsInBar) * 0.9);
             this.chordSymbolToMidiNotes(sym, pat.voicing || 'Jazz Drop-2', pat.octave || 0).forEach(n => {
-              this.midiBridge.sendNoteOn('chords', n, 90, now, dur);
+              this.midiBridge.sendNoteOn('chords', n, 90, now, dur, pat.humanize || 0);
             });
           }
         }

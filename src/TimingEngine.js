@@ -114,5 +114,31 @@ export class TimingEngine {
         // This will naturally return a negative number during the precount!
         return this.audioCtx.currentTime - this.startTime;
     }
+
+    /**
+     * Computes micro-timing displacement (deltaT) and strike-velocity jitter (deltaV)
+     * for a given humanize percentage (0..100) without mutating the master clock.
+     */
+    applyHumanize(baseTime, baseVelocity, humanize = 0) {
+        const hum = Math.max(0, Math.min(100, Number(humanize) || 0));
+        const vel = Math.round(Number(baseVelocity) || 90);
+        if (hum <= 0) {
+            return {
+                time: baseTime,
+                velocity: Math.max(1, Math.min(127, vel)),
+                deltaT: 0,
+                deltaV: 0
+            };
+        }
+        const deltaT = (Math.random() - 0.5) * 0.012 * (hum / 100);
+        const deltaV = Math.round((Math.random() - 0.5) * 20 * (hum / 100));
+        const minNow = this.audioCtx ? this.audioCtx.currentTime : 0;
+        return {
+            time: Math.max(minNow, baseTime + deltaT),
+            velocity: Math.max(1, Math.min(127, vel + deltaV)),
+            deltaT,
+            deltaV
+        };
+    }
 }
 

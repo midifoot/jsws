@@ -19,7 +19,22 @@ export class MidiBridge {
             chords: false
         };
 
+        // Global Humanize Impact Settings (configurable in System Settings)
+        this.humanizeConfig = {
+            timingWindowMs: 24, // Total timing window in ms at 100% (±12ms default, adjustable 4..80ms)
+            velocitySpan: 30    // Total velocity span in MIDI units at 100% (±15 default, adjustable 4..80)
+        };
+
         this.onPortsChanged = null;
+    }
+
+    setHumanizeConfig(cfg = {}) {
+        if (typeof cfg.timingWindowMs === 'number') {
+            this.humanizeConfig.timingWindowMs = Math.max(4, Math.min(80, cfg.timingWindowMs));
+        }
+        if (typeof cfg.velocitySpan === 'number') {
+            this.humanizeConfig.velocitySpan = Math.max(4, Math.min(80, cfg.velocitySpan));
+        }
     }
 
     setSoundFontManager(soundFontManager) {
@@ -159,12 +174,28 @@ export class MidiBridge {
         }
     }
 
-    sendNoteOn(moduleName, pitch, velocity, timeInSeconds, durationInSeconds = 0.1) {
+    sendNoteOn(moduleName, pitch, velocity, timeInSeconds, durationInSeconds = 0.1, humanize = 0) {
         const route = this.routing[moduleName];
         if (!route) return;
 
         const now = this.audioCtx ? this.audioCtx.currentTime : 0;
-        const targetTime = typeof timeInSeconds === 'number' ? timeInSeconds : now;
+        let targetTime = typeof timeInSeconds === 'number' ? timeInSeconds : now;
+        let finalVelocity = Math.round(Number(velocity) || 90);
+
+        // Humanize Engine: Micro-Timing Displacement & Velocity Jitter
+        // Applied per-event relative to the lookahead clock so zero timing drift accumulates.
+        const hum = Math.max(0, Math.min(100, Number(humanize) || 0));
+        if (hum > 0) {
+            const maxWindowSec = (this.humanizeConfig?.timingWindowMs || 24) / 1000;
+            const maxVelSpan = this.humanizeConfig?.velocitySpan || 30;
+            const deltaT = (Math.random() - 0.5) * maxWindowSec * (hum / 100);
+            const deltaV = Math.round((Math.random() - 0.5) * maxVelSpan * (hum / 100));
+            targetTime = Math.max(now, targetTime + deltaT);
+            finalVelocity = Math.max(1, Math.min(127, finalVelocity + deltaV));
+        } else {
+            finalVelocity = Math.max(1, Math.min(127, finalVelocity));
+        }
+
         const msOffset = Math.max(0, (targetTime - now) * 1000);
         const durationMs = Math.max(10, durationInSeconds * 1000);
 
@@ -172,10 +203,10 @@ export class MidiBridge {
         if (route.portId === 'internal' || this.forceInternalSf2) {
             if (this.soundFontManager && this.soundFontManager.isLoaded) {
                 if (msOffset <= 4) {
-                    this.soundFontManager.noteOn(route.channel, pitch, velocity);
+                    this.soundFontManager.noteOn(route.channel, pitch, finalVelocity);
                 } else {
                     setTimeout(() => {
-                        this.soundFontManager.noteOn(route.channel, pitch, velocity);
+                        this.soundFontManager.noteOn(route.channel, pitch, finalVelocity);
                     }, msOffset);
                 }
 
@@ -183,7 +214,7 @@ export class MidiBridge {
                     this.soundFontManager.noteOff(route.channel, pitch);
                 }, msOffset + durationMs);
             } else {
-                this.playInternalSynth(route.channel, pitch, velocity, targetTime, durationInSeconds);
+                this.playInternalSynth(route.channel, pitch, finalVelocity, targetTime, durationInSeconds);
             }
             return;
         }
@@ -194,7 +225,7 @@ export class MidiBridge {
             const timeStamp = performance.now() + msOffset;
 
             const statusByte = 0x90 + (route.channel - 1);
-            const noteOnMsg = new Uint8Array([statusByte, pitch, velocity]);
+            const noteOnMsg = new Uint8Array([statusByte, pitch, finalVelocity]);
             const noteOffMsg = new Uint8Array([0x80 + (route.channel - 1), pitch, 0]);
 
             outputPortInfo.port.send(noteOnMsg, timeStamp);

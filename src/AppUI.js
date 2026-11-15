@@ -59,6 +59,9 @@ export class AppUI {
     // Drum Pattern Step Velocities (MIDI 1-127, configurable in System Settings)
     this.drumVelocities = { ...DEFAULT_DRUM_VELOCITIES };
 
+    // Global Humanize Impact Settings (configurable in System Settings)
+    this.humanizeConfig = { timingWindowMs: 24, velocitySpan: 30 };
+
     // Pattern Library State (Initialized from src/defaults.js)
     this.patterns = createDefaultPatterns();
     this.paletteFilter = 'all';
@@ -73,6 +76,7 @@ export class AppUI {
         label: 'DRUMS',
         letter: 'A',
         level: 100,
+        humanize: 0,
         muted: false,
         solo: false,
         selectedSlot: 0,
@@ -83,6 +87,7 @@ export class AppUI {
         label: 'BASS',
         letter: 'B',
         level: 100,
+        humanize: 0,
         muted: false,
         solo: false,
         selectedSlot: 0,
@@ -93,6 +98,7 @@ export class AppUI {
         label: 'CHORDS',
         letter: 'C',
         level: 100,
+        humanize: 0,
         muted: false,
         solo: false,
         selectedSlot: 0,
@@ -231,6 +237,11 @@ export class AppUI {
     return {
       tempo,
       drumSlots: this.drumSlots.map(s => ({ ...s })),
+      trackHumanize: {
+        drums: this.tracks.drums.humanize || 0,
+        bass: this.tracks.bass.humanize || 0,
+        chords: this.tracks.chords.humanize || 0
+      },
       tracks: {
         drums: this.tracks.drums.slots.map(s => ({ ...s })),
         bass: this.tracks.bass.slots.map(s => ({ ...s })),
@@ -250,24 +261,28 @@ export class AppUI {
       savedAt: new Date().toISOString(),
       tempo: this.engine ? this.engine.tempo : 120,
       timeSigSyncMode: this.timeSigSyncMode || 'independent',
+      humanizeConfig: { ...this.humanizeConfig },
       drumVelocities: { ...this.drumVelocities },
       drumSlots: this.drumSlots.map(s => ({ ...s })),
       tracks: {
         drums: {
           muted: !!this.tracks.drums.muted,
           solo: !!this.tracks.drums.solo,
+          humanize: this.tracks.drums.humanize || 0,
           selectedSlot: this.tracks.drums.selectedSlot || 0,
           slots: this.tracks.drums.slots.map(s => ({ ...s }))
         },
         bass: {
           muted: !!this.tracks.bass.muted,
           solo: !!this.tracks.bass.solo,
+          humanize: this.tracks.bass.humanize || 0,
           selectedSlot: this.tracks.bass.selectedSlot || 0,
           slots: this.tracks.bass.slots.map(s => ({ ...s }))
         },
         chords: {
           muted: !!this.tracks.chords.muted,
           solo: !!this.tracks.chords.solo,
+          humanize: this.tracks.chords.humanize || 0,
           selectedSlot: this.tracks.chords.selectedSlot || 0,
           slots: this.tracks.chords.slots.map(s => ({ ...s }))
         }
@@ -295,6 +310,16 @@ export class AppUI {
       if (typeof this.updateSyncModeUI === 'function') this.updateSyncModeUI();
     }
 
+    if (data.humanizeConfig && typeof data.humanizeConfig === 'object') {
+      this.humanizeConfig = {
+        timingWindowMs: Math.max(4, Math.min(80, parseInt(data.humanizeConfig.timingWindowMs, 10) || 24)),
+        velocitySpan: Math.max(4, Math.min(80, parseInt(data.humanizeConfig.velocitySpan, 10) || 30))
+      };
+      if (this.midiBridge && typeof this.midiBridge.setHumanizeConfig === 'function') {
+        this.midiBridge.setHumanizeConfig(this.humanizeConfig);
+      }
+    }
+
     if (data.drumVelocities && typeof data.drumVelocities === 'object') {
       this.drumVelocities = {
         ...this.drumVelocities,
@@ -308,7 +333,10 @@ export class AppUI {
     }
 
     if (Array.isArray(data.patterns) && data.patterns.length > 0) {
-      this.patterns = JSON.parse(JSON.stringify(data.patterns));
+      this.patterns = JSON.parse(JSON.stringify(data.patterns)).map(p => ({
+        humanize: 0,
+        ...p
+      }));
     }
 
     if (data.tracks && typeof data.tracks === 'object') {
@@ -321,6 +349,7 @@ export class AppUI {
           this.tracks[tk].slots = src.slots.map(s => ({ ...s }));
           if (typeof src.muted === 'boolean') this.tracks[tk].muted = src.muted;
           if (typeof src.solo === 'boolean') this.tracks[tk].solo = src.solo;
+          if (typeof src.humanize === 'number') this.tracks[tk].humanize = Math.max(0, Math.min(100, Math.round(src.humanize)));
           if (typeof src.selectedSlot === 'number') this.tracks[tk].selectedSlot = src.selectedSlot;
         }
       });
@@ -657,6 +686,9 @@ export class AppUI {
           this.tracks[trackKey].slots = snap.tracks[trackKey].map(s => ({ ...s }));
           this.tracks[trackKey].selectedSlot = 0;
         }
+        if (snap.trackHumanize && typeof snap.trackHumanize[trackKey] === 'number') {
+          this.tracks[trackKey].humanize = Math.max(0, Math.min(100, Math.round(snap.trackHumanize[trackKey])));
+        }
       });
       this.renderStageTracks();
       this.updateChordDisplay(0, 0);
@@ -911,6 +943,12 @@ export class AppUI {
               <span class="track-level-val" id="track-lvl-val-${trackKey}">${track.level}%</span>
             </div>
 
+            <div class="track-humanize-wrap" title="Track Humanize Override (0% = use Pattern's own Humanize %, >0% = override micro-timing ±12ms &amp; velocity jitter)">
+              <span>HUMAN</span>
+              <input type="range" class="track-humanize-slider" data-track="${trackKey}" min="0" max="100" value="${track.humanize || 0}">
+              <span class="track-humanize-val" id="track-hum-val-${trackKey}">${track.humanize || 0}%</span>
+            </div>
+
             <div class="track-ms-cluster">
               <button class="btn-ms mute-btn ${track.muted ? 'active' : ''}" data-track="${trackKey}" title="Mute ${track.label}">M</button>
               <button class="btn-ms solo-btn ${track.solo ? 'active' : ''}" data-track="${trackKey}" title="Solo ${track.label}">S</button>
@@ -1047,6 +1085,17 @@ export class AppUI {
         const lbl = document.getElementById(`track-lvl-val-${trackKey}`);
         if (lbl) lbl.textContent = `${val}%`;
         this.updateEffectiveTrackGains();
+      });
+    });
+
+    container.querySelectorAll('.track-humanize-slider').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const trackKey = slider.getAttribute('data-track');
+        const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+        this.tracks[trackKey].humanize = val;
+        const lbl = document.getElementById(`track-hum-val-${trackKey}`);
+        if (lbl) lbl.textContent = `${val}%`;
+        this.saveWorkspaceToLocalStorage();
       });
     });
 

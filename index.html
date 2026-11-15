@@ -307,6 +307,15 @@
             <span id="drum-ed-slot-summary" class="badge-mono" style="height: 30px; display: inline-flex; align-items: center; color: var(--color-drums);">16 / Bar • 16 Total</span>
           </div>
 
+          <div class="ctrl-field">
+            <span class="card-section-label">HUMAN %</span>
+            <div class="humanize-ctrl-box" title="Humanize Micro-Timing (±12ms) &amp; Velocity Jitter (±10 MIDI units)">
+              <input type="range" id="drum-ed-humanize-slider" min="0" max="100" step="1" value="0" class="humanize-slider">
+              <input type="number" id="drum-ed-humanize" min="0" max="100" step="1" value="0" class="humanize-num-input">
+              <span class="humanize-pct-unit">%</span>
+            </div>
+          </div>
+
           <div class="ctrl-field" style="margin-left: auto;">
             <span class="card-section-label">Audition</span>
             <button id="btn-drum-solo" class="btn btn-green">▶ PLAY SOLO</button>
@@ -425,6 +434,15 @@
             </div>
           </div>
 
+          <div class="ctrl-field">
+            <span class="card-section-label">HUMAN %</span>
+            <div class="humanize-ctrl-box" title="Humanize Micro-Timing (±12ms) &amp; Velocity Jitter (±10 MIDI units)">
+              <input type="range" id="bass-ed-humanize-slider" min="0" max="100" step="1" value="0" class="humanize-slider">
+              <input type="number" id="bass-ed-humanize" min="0" max="100" step="1" value="0" class="humanize-num-input">
+              <span class="humanize-pct-unit">%</span>
+            </div>
+          </div>
+
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
             <button id="btn-rehearsal-mute-bass" class="btn-rehearsal-mute" title="Silence bass track to practice on physical bass">MUTE BASS</button>
             <button id="btn-bass-solo" class="btn btn-green">▶ PLAY SOLO</button>
@@ -528,6 +546,15 @@
             </select>
           </div>
 
+          <div class="ctrl-field">
+            <span class="card-section-label">HUMAN %</span>
+            <div class="humanize-ctrl-box" title="Humanize Micro-Timing (±12ms) &amp; Velocity Jitter (±10 MIDI units)">
+              <input type="range" id="chord-ed-humanize-slider" min="0" max="100" step="1" value="0" class="humanize-slider">
+              <input type="number" id="chord-ed-humanize" min="0" max="100" step="1" value="0" class="humanize-num-input">
+              <span class="humanize-pct-unit">%</span>
+            </div>
+          </div>
+
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
             <button class="btn btn-gold btn-open-chords-dict">CHORDS DICTIONARY</button>
             <button id="btn-chord-solo" class="btn btn-green">▶ PLAY SOLO</button>
@@ -618,6 +645,43 @@
             <div style="display: flex; align-items: center; gap: 0.45rem;">
               <button id="btn-settings-export-json" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;">⬇ Export .json</button>
               <button id="btn-settings-import-json" class="btn btn-green" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;">⬆ Import .json</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Humanize Engine Global Impact (Micro-Timing & Velocity Range) -->
+        <div class="hw-card" style="grid-column: 1 / -1;">
+          <div class="settings-card-header">
+            <div>
+              <h3 class="settings-card-title" style="color: var(--color-chords);">Humanize Engine — Global Impact &amp; Sensitivity</h3>
+              <span style="font-size: 0.78rem; color: var(--color-text-dim);">Scale the maximum micro-timing displacement (ms) and strike-velocity jitter (MIDI units) produced when a Track or Pattern is set to 100% Humanize. Applied in real time without restarting playback.</span>
+            </div>
+            <button id="btn-reset-humanize-config" class="btn">Reset Humanize Defaults</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.75rem; margin-top: 0.25rem;">
+            <div class="routing-row" style="background: rgba(255, 170, 0, 0.04); padding: 0.65rem 0.8rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: var(--color-chords);">Max Micro-Timing Window (at 100%)</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">Total timing spread around grid (<span id="lbl-hum-timing-plusminus">±12.0 ms</span>) • Spec min: 12 ms / Loose: 40–60 ms</div>
+              </div>
+              <div class="humanize-ctrl-box">
+                <input type="range" id="hum-cfg-timing-slider" min="4" max="80" step="2" value="24" class="humanize-slider">
+                <input type="number" id="hum-cfg-timing-num" min="4" max="80" step="1" value="24" class="humanize-num-input">
+                <span class="humanize-pct-unit">ms</span>
+              </div>
+            </div>
+
+            <div class="routing-row" style="background: rgba(0, 255, 136, 0.04); padding: 0.65rem 0.8rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: var(--color-drums);">Max Velocity Jitter Span (at 100%)</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">Total MIDI velocity variation (<span id="lbl-hum-vel-plusminus">±15 vel</span>) • Spec min: 20 / Dynamic: 30–60</div>
+              </div>
+              <div class="humanize-ctrl-box">
+                <input type="range" id="hum-cfg-vel-slider" min="4" max="80" step="2" value="30" class="humanize-slider">
+                <input type="number" id="hum-cfg-vel-num" min="4" max="80" step="1" value="30" class="humanize-num-input">
+                <span class="humanize-pct-unit">vel</span>
+              </div>
             </div>
           </div>
         </div>

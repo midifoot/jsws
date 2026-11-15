@@ -169,6 +169,61 @@ export const AppSettingsModalsMixin = {
         this.log('[SETTINGS] Reset 10-slot Drum Editor instruments to GM defaults');
       });
     }
+
+    // Humanize Engine Global Impact & Sensitivity (System Settings)
+    const humTimingSlider = document.getElementById('hum-cfg-timing-slider');
+    const humTimingNum = document.getElementById('hum-cfg-timing-num');
+    const humTimingLbl = document.getElementById('lbl-hum-timing-plusminus');
+    const humVelSlider = document.getElementById('hum-cfg-vel-slider');
+    const humVelNum = document.getElementById('hum-cfg-vel-num');
+    const humVelLbl = document.getElementById('lbl-hum-vel-plusminus');
+    const btnResetHumCfg = document.getElementById('btn-reset-humanize-config');
+
+    const applyHumanizeConfigUI = (timingMs, velSpan, save = true) => {
+      const clampedMs = Math.max(4, Math.min(80, parseInt(timingMs, 10) || 24));
+      const clampedVel = Math.max(4, Math.min(80, parseInt(velSpan, 10) || 30));
+      this.humanizeConfig = { timingWindowMs: clampedMs, velocitySpan: clampedVel };
+      if (this.midiBridge && typeof this.midiBridge.setHumanizeConfig === 'function') {
+        this.midiBridge.setHumanizeConfig(this.humanizeConfig);
+      }
+      if (humTimingSlider) humTimingSlider.value = String(clampedMs);
+      if (humTimingNum) humTimingNum.value = String(clampedMs);
+      if (humTimingLbl) humTimingLbl.textContent = `±${(clampedMs / 2).toFixed(1)} ms`;
+      if (humVelSlider) humVelSlider.value = String(clampedVel);
+      if (humVelNum) humVelNum.value = String(clampedVel);
+      if (humVelLbl) humVelLbl.textContent = `±${Math.round(clampedVel / 2)} vel`;
+      if (save) this.saveWorkspaceToLocalStorage();
+    };
+
+    const initCfg = this.humanizeConfig || { timingWindowMs: 24, velocitySpan: 30 };
+    applyHumanizeConfigUI(initCfg.timingWindowMs, initCfg.velocitySpan, false);
+
+    if (humTimingSlider) {
+      humTimingSlider.addEventListener('input', (e) => {
+        applyHumanizeConfigUI(e.target.value, this.humanizeConfig?.velocitySpan || 30, true);
+      });
+    }
+    if (humTimingNum) {
+      humTimingNum.addEventListener('input', (e) => {
+        applyHumanizeConfigUI(e.target.value, this.humanizeConfig?.velocitySpan || 30, true);
+      });
+    }
+    if (humVelSlider) {
+      humVelSlider.addEventListener('input', (e) => {
+        applyHumanizeConfigUI(this.humanizeConfig?.timingWindowMs || 24, e.target.value, true);
+      });
+    }
+    if (humVelNum) {
+      humVelNum.addEventListener('input', (e) => {
+        applyHumanizeConfigUI(this.humanizeConfig?.timingWindowMs || 24, e.target.value, true);
+      });
+    }
+    if (btnResetHumCfg) {
+      btnResetHumCfg.addEventListener('click', () => {
+        applyHumanizeConfigUI(24, 30, true);
+        this.log('[SETTINGS] Reset Humanize Engine Global Impact to defaults (24 ms / ±12 ms timing, 30 / ±15 velocity)');
+      });
+    }
   },
 
   // Render MIDI Routing & Internal .sf2 Fallback Chooser (macOS IAC Driver Override)
@@ -408,6 +463,7 @@ export const AppSettingsModalsMixin = {
         bpm: 120,
         bars: 1,
         resolution: '1/16',
+        humanize: 0,
         preset: DEFAULT_GM_PRESETS.rhythm.program,
         preview: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
         rowMutes: new Array(10).fill(false),
@@ -426,6 +482,7 @@ export const AppSettingsModalsMixin = {
         bpm: 120,
         bars: 1,
         resolution: '1/16',
+        humanize: 0,
         preset: DEFAULT_GM_PRESETS.bass.program,
         mode: 'follower',
         preview: new Array(16).fill(1),
@@ -450,6 +507,7 @@ export const AppSettingsModalsMixin = {
         resolution: '1/1',
         voicing: 'Jazz Drop-2',
         octave: 0,
+        humanize: 0,
         preset: DEFAULT_GM_PRESETS.chords.program,
         preview: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
         measures: [['Cmaj7'], ['Am7'], ['Dm7'], ['G7']]
@@ -767,8 +825,11 @@ export const AppSettingsModalsMixin = {
             cPat.octave || 0
           );
           const chordDur = slotDurSec * 0.92;
+          const chordHum = (this.tracks.chords.humanize || 0) > 0
+            ? this.tracks.chords.humanize
+            : (cPat.humanize || 0);
           midiNotes.forEach(note => {
-            this.midiBridge.sendNoteOn('chords', note, 85, tStep, chordDur);
+            this.midiBridge.sendNoteOn('chords', note, 85, tStep, chordDur, chordHum);
           });
         }
 
@@ -828,6 +889,9 @@ export const AppSettingsModalsMixin = {
         }
 
         if (isTrackAudible('drums')) {
+          const drumHum = (this.tracks.drums.humanize || 0) > 0
+            ? this.tracks.drums.humanize
+            : (dPat.humanize || 0);
           this.drumSlots.forEach((inst, rowIdx) => {
             if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
             if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
@@ -835,7 +899,7 @@ export const AppSettingsModalsMixin = {
             if (state > 0) {
               const vel = this.getDrumStepVelocity(state);
               const dur = state === 2 ? 0.18 : (state === 1 ? 0.15 : 0.12);
-              this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, tStep, dur);
+              this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, tStep, dur, drumHum);
             }
           });
         }
@@ -899,7 +963,10 @@ export const AppSettingsModalsMixin = {
             : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] ?? 0));
           const vel = stepObj.accent ? 120 : 92;
           const dur = Math.max(0.06, bStepDur * (stepObj.gate / 100));
-          this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur);
+          const bassHum = (this.tracks.bass.humanize || 0) > 0
+            ? this.tracks.bass.humanize
+            : (bPat.humanize || 0);
+          this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur, bassHum);
         }
 
         if (this.editingPatternId === bPat.id) {

@@ -2067,4 +2067,68 @@ input[type="range"] {
   line-height: 1.35;
 }
 
+/* ============================================================================
+   HUMANIZE ENGINE (MICRO-TIMING & VELOCITY JITTER) CONTROLS
+   ============================================================================ */
+.humanize-ctrl-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 0 0.45rem;
+  height: 30px;
+}
+
+.humanize-slider {
+  width: 68px;
+  accent-color: var(--color-chords);
+  cursor: pointer;
+}
+
+.humanize-num-input {
+  width: 48px !important;
+  height: 22px;
+  padding: 0 0.25rem !important;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--color-chords) !important;
+  text-align: right;
+  border: 1px solid rgba(255, 170, 0, 0.35) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+
+.humanize-pct-unit {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-dim);
+}
+
+.track-humanize-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--color-chords);
+  font-weight: 700;
+}
+
+.track-humanize-slider {
+  width: 58px;
+  accent-color: var(--color-chords);
+  cursor: pointer;
+}
+
+.track-humanize-val {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  min-width: 30px;
+  text-align: right;
+  color: var(--color-chords);
+}
+
+
 
