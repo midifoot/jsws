@@ -3,7 +3,6 @@
     ADDITIONAL FEATURES ( to be added LATER so not to do now !)
     
     
-        - completely remove chords dict and redo it's logic for a simpler step builded chord (to be detailed later) , also add "voicing edition" with relevant options & UI 
         - add rythm / bassline / chord sequence RANDOM GENERATOR (inside the pattern editor) 
         - add all the subtile chord substitution logic (predictive algo) , TENSION driven patterns 
         - ADD AUDIO EXPORT ? mp3 ? 

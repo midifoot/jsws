@@ -1,5 +1,7 @@
 import { AppEditorsMixin } from './AppEditors.js';
 import { AppSettingsModalsMixin } from './AppSettingsModals.js';
+import { chordDictionary } from './theory/ChordDictionary.js';
+import { ChordDictionaryModal } from './ui/ChordDictionaryModal.js';
 /**
  * src/AppUI.js - AutoBand Front-End UI/UX Controller
  * Manages tab navigation, Main Stage loops/palette/snapshots, Unified Pattern Library,
@@ -107,9 +109,12 @@ export class AppUI {
     this.pendingSnapshotName = null;
     this.soloTimer = null;
 
-    // Active Playback Cursor
+    // Active Playback Cursor & Multi-Signature Sync Mode ('bar-fit' | 'independent' | 'master-reset')
+    this.timeSigSyncMode = 'independent';
     this.activeBarIndex = 0;
     this.activeBeatInBar = 0;
+    this.masterClock = null;
+    this.trackClocks = null;
   }
 
   getGMDrumLabelByPitch(pitch) {
@@ -244,6 +249,7 @@ export class AppUI {
       version: 1,
       savedAt: new Date().toISOString(),
       tempo: this.engine ? this.engine.tempo : 120,
+      timeSigSyncMode: this.timeSigSyncMode || 'independent',
       drumVelocities: { ...this.drumVelocities },
       drumSlots: this.drumSlots.map(s => ({ ...s })),
       tracks: {
@@ -282,6 +288,11 @@ export class AppUI {
       const bpmSlider = document.getElementById('bpm-slider');
       if (bpmVal) bpmVal.textContent = String(data.tempo);
       if (bpmSlider) bpmSlider.value = String(data.tempo);
+    }
+
+    if (typeof data.timeSigSyncMode === 'string' && ['bar-fit', 'independent', 'master-reset'].includes(data.timeSigSyncMode)) {
+      this.timeSigSyncMode = data.timeSigSyncMode;
+      if (typeof this.updateSyncModeUI === 'function') this.updateSyncModeUI();
     }
 
     if (data.drumVelocities && typeof data.drumVelocities === 'object') {
@@ -406,6 +417,20 @@ export class AppUI {
 
   init() {
     const restored = this.loadWorkspaceFromLocalStorage();
+
+    // Initialize interactive Chord Dictionary & Voicing Explorer Modal
+    this.chordDictModal = new ChordDictionaryModal({
+      dictionary: chordDictionary,
+      appUI: this
+    });
+    chordDictionary.init();
+    chordDictionary.subscribe(() => {
+      const currentPat = this.getPatternById(this.editingPatternId);
+      if (currentPat && currentPat.type === 'chords') {
+        this.renderChordMeasuresGrid(currentPat);
+      }
+      this.updateChordDisplay(this.activeBarIndex || 0, 0);
+    });
 
     this.bindGlobalNavigation();
     this.bindLoggerFooter();
@@ -719,180 +744,11 @@ export class AppUI {
     this.log(`[SNAPSHOT] ${isOverwrite ? 'Overwrote' : 'Saved new'} snapshot "${name}"`);
   }
 
-  // Schedule Drum, Bass, and Chord notes for a quarter-note pulse using MidiBridge,
-  // with exact support for any Time Signature (1..21 / 4 or 8) and Resolution (1/8, 1/8T, 1/16, 1/32).
+  // Schedule Drum, Bass, and Chord notes for a quarter-note lookahead window using MidiBridge,
+  // with full support for all 3 Time-Signature Sync Modes ('bar-fit', 'independent', 'master-reset'),
+  // sequential time-signature changes (e.g. 4/4 -> 7/8), and per-pattern Tempo Ratios.
   schedulePlaybackBeat(pulseNumber, beatTime) {
-    const secPerQuarter = 60.0 / (parseFloat(this.engine.tempo) || 120);
-    const nowCtx = this.engine.audioCtx ? this.engine.audioCtx.currentTime : 0;
-
-    const anySolo = Object.values(this.tracks).some(t => t.solo);
-    const isTrackAudible = (trackKey) => {
-      const t = this.tracks[trackKey];
-      if (t.muted) return false;
-      if (anySolo && !t.solo) return false;
-      return true;
-    };
-
-    // Determine master stage Time Signature from active Drum slot (or fallback 4/4)
-    let stageTimeSig = '4/4';
-    if (this.tracks.drums.slots.length > 0) {
-      const refPat = this.getPatternById(this.tracks.drums.slots[this.activeBarIndex % this.tracks.drums.slots.length]?.patternId);
-      if (refPat && refPat.timeSig) stageTimeSig = refPat.timeSig;
-    }
-    const { upper: stageUpper, lower: stageLower } = this.parseTimeSig(stageTimeSig);
-
-    // Schedule Stage LED & Bar/Slot visual updates accurately for both /4 and /8 meters
-    const unitsPerQuarter = stageLower === 8 ? 2 : 1;
-    for (let u = 0; u < unitsPerQuarter; u++) {
-      const unitIndex = pulseNumber * unitsPerQuarter + u;
-      const beatInBar = (unitIndex % stageUpper) + 1;
-      const barIndex = Math.floor(unitIndex / stageUpper);
-      const tUnit = beatTime + u * (secPerQuarter / unitsPerQuarter);
-      const delayMs = Math.max(0, (tUnit - nowCtx) * 1000);
-
-      setTimeout(() => {
-        if (!this.engine.isPlaying) return;
-        this.activeBeatInBar = beatInBar;
-        this.activeBarIndex = barIndex;
-
-        const pulseLed = document.getElementById('pulse-indicator');
-        if (pulseLed) {
-          pulseLed.className = 'beat-pulse-led pulse-beat';
-          pulseLed.textContent = `${beatInBar}/${stageUpper}`;
-          setTimeout(() => {
-            if (this.engine.isPlaying) pulseLed.className = 'beat-pulse-led';
-          }, 95);
-        }
-
-        this.highlightPlayingSlots(barIndex);
-        this.updateChordDisplay(barIndex, beatInBar - 1, stageUpper);
-      }, delayMs);
-    }
-
-    // 1. Chords Track (Supports independent per-bar chord counts: 1, 2, 3, or 4 chords per bar, plus silent slots)
-    const chordSlots = this.tracks.chords.slots;
-    const cBarIndex = Math.floor((pulseNumber * unitsPerQuarter) / stageUpper);
-    const cBeatInBar = (pulseNumber * unitsPerQuarter) % stageUpper;
-    let activeChordSymbol = 'Am7';
-    if (chordSlots.length > 0) {
-      const cSlot = chordSlots[cBarIndex % chordSlots.length];
-      const cPat = this.getPatternById(cSlot.patternId);
-      if (cPat && cPat.measures && cPat.measures.length > 0) {
-        const barInPat = cBarIndex % cPat.measures.length;
-        const m = cPat.measures[barInPat] || ['Am7'];
-        const chordsInBar = Math.max(1, m.length);
-        const chordSlotIdx = Math.min(chordsInBar - 1, Math.floor((cBeatInBar / Math.max(1, stageUpper)) * chordsInBar));
-        const prevChordSlotIdx = cBeatInBar === 0
-          ? -1
-          : Math.min(chordsInBar - 1, Math.floor(((cBeatInBar - 1) / Math.max(1, stageUpper)) * chordsInBar));
-
-        // Preserve empty string "" or "O" so silent slots stay silent!
-        activeChordSymbol = m[chordSlotIdx] !== undefined ? m[chordSlotIdx] : 'Am7';
-        const isChordSilent = this.isSilentChordSymbol(activeChordSymbol);
-
-        // Trigger whenever the bar begins OR when advancing to a new chord slot within the bar
-        if (cBeatInBar === 0 || chordSlotIdx !== prevChordSlotIdx) {
-          if (isTrackAudible('chords') && !isChordSilent) {
-            const midiNotes = this.chordSymbolToMidiNotes(
-              activeChordSymbol,
-              cPat.voicing || 'Jazz Drop-2',
-              cPat.octave || 0
-            );
-            const beatsForChord = Math.max(0.85, (stageUpper / chordsInBar) * (stageLower === 8 ? 0.5 : 1.0));
-            const chordDur = secPerQuarter * beatsForChord * 0.92;
-            midiNotes.forEach(note => {
-              this.midiBridge.sendNoteOn('chords', note, 85, beatTime, chordDur);
-            });
-          }
-
-          if (this.editingPatternId === cPat.id) {
-            const stepDelay = Math.max(0, (beatTime - nowCtx) * 1000);
-            setTimeout(() => {
-              if (this.engine.isPlaying) this.highlightChordEditorSlot(barInPat, chordSlotIdx);
-            }, stepDelay);
-          }
-        }
-      }
-    }
-
-    const isActiveChordSilent = this.isSilentChordSymbol(activeChordSymbol);
-
-    // 2. Drums Track (Exact slot timing for any upper/lower and 1/8, 1/8T, 1/16, 1/32)
-    if (this.tracks.drums.slots.length > 0) {
-      // Find active drum pattern for current bar
-      const dSlotCurrent = this.tracks.drums.slots[cBarIndex % this.tracks.drums.slots.length];
-      const dPat = this.getPatternById(dSlotCurrent.patternId);
-      if (dPat && dPat.drumGrid) {
-        const slotsPerQuarter = this.getSlotsPerQuarter(dPat.timeSig, dPat.resolution);
-        const totalSteps = Math.max(1, this.getTotalSteps(dPat));
-        const dStepDur = secPerQuarter / slotsPerQuarter;
-        const anyRowSolo = dPat.rowSolos && dPat.rowSolos.some(Boolean);
-
-        for (let sub = 0; sub < slotsPerQuarter; sub++) {
-          const absStep = pulseNumber * slotsPerQuarter + sub;
-          const stepIndex = absStep % totalSteps;
-          const tStep = beatTime + sub * dStepDur;
-
-          if (isTrackAudible('drums')) {
-            this.drumSlots.forEach((inst, rowIdx) => {
-              if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
-              if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
-              const state = dPat.drumGrid[rowIdx] && dPat.drumGrid[rowIdx][stepIndex];
-              if (state > 0) {
-                const vel = this.getDrumStepVelocity(state);
-                const dur = state === 2 ? 0.18 : (state === 1 ? 0.15 : 0.12);
-                this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, tStep, dur);
-              }
-            });
-          }
-
-          if (this.editingPatternId === dPat.id) {
-            const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
-            setTimeout(() => {
-              if (this.engine.isPlaying) this.highlightEditorStep('drums', stepIndex);
-            }, stepDelay);
-          }
-        }
-      }
-    }
-
-    // 3. Bass Track (Exact slot timing for any upper/lower and 1/8, 1/8T, 1/16, 1/32)
-    // When active chord is silent, Bass also stops ONLY if "Harmonic Follower" mode is active;
-    // in "Strict Pitch" mode, Bass continues playing its pattern notes.
-    if (this.tracks.bass.slots.length > 0) {
-      const bSlot = this.tracks.bass.slots[cBarIndex % this.tracks.bass.slots.length];
-      const bPat = this.getPatternById(bSlot.patternId);
-      if (bPat && bPat.bassSteps) {
-        const slotsPerQuarter = this.getSlotsPerQuarter(bPat.timeSig, bPat.resolution);
-        const totalSteps = Math.max(1, this.getTotalSteps(bPat));
-        const bStepDur = secPerQuarter / slotsPerQuarter;
-        const isBassSilencedByChord = isActiveChordSilent && bPat.mode !== 'strict';
-        const rootMidi = isActiveChordSilent ? 45 : (this.getChordRootMidi(activeChordSymbol) - 24);
-
-        for (let sub = 0; sub < slotsPerQuarter; sub++) {
-          const absStep = pulseNumber * slotsPerQuarter + sub;
-          const stepIndex = absStep % totalSteps;
-          const stepObj = bPat.bassSteps[stepIndex];
-          const tStep = beatTime + sub * bStepDur;
-
-          if (isTrackAudible('bass') && !isBassSilencedByChord && stepObj && !stepObj.rest) {
-            const midiPitch = bPat.mode === 'strict'
-              ? (PITCH_TO_MIDI[stepObj.pitch] ?? 33)
-              : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] ?? 0));
-            const vel = stepObj.accent ? 120 : 92;
-            const dur = Math.max(0.06, bStepDur * (stepObj.gate / 100));
-            this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur);
-          }
-
-          if (this.editingPatternId === bPat.id) {
-            const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
-            setTimeout(() => {
-              if (this.engine.isPlaying) this.highlightEditorStep('bass', stepIndex);
-            }, stepDelay);
-          }
-        }
-      }
-    }
+    this.scheduleMultiSigBeat(pulseNumber, beatTime);
   }
 
   // --- 3. Block B: Chords Displayer ("Now & Next") ---
@@ -1090,6 +946,7 @@ export class AppUI {
         const tensionSign = slotObj.tension > 0 ? `+${slotObj.tension}` : `${slotObj.tension}`;
         const isSelected = track.selectedSlot === slotIdx;
 
+        const ratioTag = (pat.tempoRatio && pat.tempoRatio !== '1:1') ? ` • ${pat.tempoRatio}` : '';
         unit.innerHTML = `
           <div class="pattern-slot-box ${isSelected ? 'selected-slot' : ''}"
                draggable="true"
@@ -1098,7 +955,7 @@ export class AppUI {
                title="Click to select, Drag to reorder or drop from Palette, Double-click to Edit">
             <div class="slot-top-meta">
               <span class="slot-index-tag">#${slotIdx + 1}</span>
-              <span class="slot-timesig-badge">${pat.timeSig}</span>
+              <span class="slot-timesig-badge">${pat.timeSig}${ratioTag}</span>
             </div>
             <div class="slot-pattern-code">${pat.id}</div>
             <div class="slot-pattern-name">${pat.name}</div>
@@ -1269,6 +1126,10 @@ export class AppUI {
         this.renderStageTracks();
       });
     });
+
+    if (typeof this.evaluateAndRenderSyncStatus === 'function') {
+      this.evaluateAndRenderSyncStatus(false);
+    }
   }
 
   getPresetOptionsHtml(trackKey) {
@@ -1329,10 +1190,11 @@ export class AppUI {
       tile.className = `palette-tile type-${p.type}`;
       tile.draggable = true;
       tile.title = 'Drag onto a track slot, Click to assign to selected slot, Double-click to open Editor';
+      const pRatio = (p.tempoRatio && p.tempoRatio !== '1:1') ? `•${p.tempoRatio}` : '';
       tile.innerHTML = `
         <div class="palette-tile-top">
           <span>${p.id}</span>
-          <span>${p.timeSig}</span>
+          <span>${p.timeSig}${pRatio}</span>
         </div>
         <div class="palette-tile-name">${p.name}</div>
       `;

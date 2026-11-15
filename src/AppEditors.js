@@ -5,6 +5,7 @@ import {
   DEFAULT_GM_PRESETS,
   getDefaultBeatSeparator
 } from './defaults.js';
+import { chordDictionary } from './theory/ChordDictionary.js';
 
 const STRICT_PITCHES = [
   'C1', 'C#1', 'D1', 'Eb1', 'E1', 'F1', 'F#1', 'G1', 'Ab1', 'A1', 'Bb1', 'B1',
@@ -101,7 +102,8 @@ export const AppEditorsMixin = {
       const row = document.createElement('div');
       row.className = 'pattern-row';
 
-      const syncText = p.syncMaster ? 'Sync with Master' : `${p.bpm || 120} BPM`;
+      const ratioBadge = (p.tempoRatio && p.tempoRatio !== '1:1') ? ` • Ratio ${p.tempoRatio}` : '';
+      const syncText = (p.syncMaster !== false ? 'Sync with Master' : `${p.bpm || 120} BPM`) + ratioBadge;
       const stepsCount = p.type === 'chords'
         ? (p.measures ? p.measures.reduce((sum, m) => sum + (m ? m.length : 1), 0) : (p.bars || 4))
         : this.getTotalSteps(p);
@@ -200,6 +202,8 @@ export const AppEditorsMixin = {
       pat.timeSig = `${num}/${den}`;
       pat.syncMaster = document.getElementById('drum-ed-sync').checked;
       pat.bpm = Math.max(40, Math.min(280, parseFloat(document.getElementById('drum-ed-bpm').value) || 120));
+      const drumRatioEl = document.getElementById('drum-ed-ratio');
+      pat.tempoRatio = (drumRatioEl && drumRatioEl.value) || '1:1';
       pat.bars = parseInt(document.getElementById('drum-ed-bars').textContent, 10) || 1;
       pat.resolution = document.getElementById('drum-ed-res').value;
       pat.beatSep = Math.max(1, Math.min(9, parseInt(document.getElementById('drum-ed-beatsep').value, 10) || 4));
@@ -214,6 +218,8 @@ export const AppEditorsMixin = {
       pat.timeSig = `${num}/${den}`;
       pat.syncMaster = document.getElementById('bass-ed-sync').checked;
       pat.bpm = Math.max(40, Math.min(280, parseFloat(document.getElementById('bass-ed-bpm').value) || 120));
+      const bassRatioEl = document.getElementById('bass-ed-ratio');
+      pat.tempoRatio = (bassRatioEl && bassRatioEl.value) || '1:1';
       pat.bars = parseInt(document.getElementById('bass-ed-bars').textContent, 10) || 1;
       pat.resolution = document.getElementById('bass-ed-res').value;
       pat.beatSep = Math.max(1, Math.min(9, parseInt(document.getElementById('bass-ed-beatsep').value, 10) || 4));
@@ -226,6 +232,8 @@ export const AppEditorsMixin = {
       pat.timeSig = `${num}/${den}`;
       pat.syncMaster = document.getElementById('chord-ed-sync').checked;
       pat.bpm = Math.max(40, Math.min(280, parseFloat(document.getElementById('chord-ed-bpm').value) || 120));
+      const chordRatioEl = document.getElementById('chord-ed-ratio');
+      pat.tempoRatio = (chordRatioEl && chordRatioEl.value) || '1:1';
       pat.bars = pat.measures ? pat.measures.length : (pat.bars || 4);
       pat.resolution = this.getChordPatternResolutionSummary(pat);
       pat.voicing = document.getElementById('chord-ed-voicing').value;
@@ -237,6 +245,9 @@ export const AppEditorsMixin = {
     this.renderPalette();
     this.renderStageTracks();
     this.updateChordDisplay(this.activeBarIndex, 0);
+    if (typeof this.evaluateAndRenderSyncStatus === 'function') {
+      this.evaluateAndRenderSyncStatus(true);
+    }
     this.log(`[EDITOR] Saved changes to ${pat.id} (${pat.name})`);
     this.stopSoloAudition();
     this.closeEditorsToLibrary();
@@ -247,6 +258,7 @@ export const AppEditorsMixin = {
     const syncCheck = document.getElementById('drum-ed-sync');
     const bpmWrap = document.getElementById('drum-ed-bpm-wrap');
     const bpmInput = document.getElementById('drum-ed-bpm');
+    const ratioSelect = document.getElementById('drum-ed-ratio');
     const tsNumSelect = document.getElementById('drum-ed-ts-num');
     const tsDenSelect = document.getElementById('drum-ed-ts-den');
     const resSelect = document.getElementById('drum-ed-res');
@@ -261,7 +273,12 @@ export const AppEditorsMixin = {
         const synced = e.target.checked;
         bpmWrap.style.display = synced ? 'none' : 'flex';
         const pat = this.getPatternById(this.editingPatternId);
-        if (pat) pat.syncMaster = synced;
+        if (pat) {
+          pat.syncMaster = synced;
+          if (!synced) {
+            this.log(`[SYNC WARNING] ${pat.id} unlocked from Master Tempo (${pat.bpm || 120} BPM). Consider using Tempo Ratio to stay locked when Master BPM changes.`);
+          }
+        }
       });
     }
 
@@ -271,6 +288,15 @@ export const AppEditorsMixin = {
         e.target.value = val;
         const pat = this.getPatternById(this.editingPatternId);
         if (pat) pat.bpm = val;
+      });
+    }
+
+    if (ratioSelect) {
+      ratioSelect.addEventListener('change', (e) => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat) return;
+        pat.tempoRatio = e.target.value || '1:1';
+        this.log(`[DRUM EDITOR] Tempo Ratio -> ${pat.tempoRatio}`);
       });
     }
 
@@ -352,6 +378,8 @@ export const AppEditorsMixin = {
 
     document.getElementById('drum-ed-sync').checked = pat.syncMaster !== false;
     document.getElementById('drum-ed-bpm').value = pat.bpm || 120;
+    const drumRatioEl = document.getElementById('drum-ed-ratio');
+    if (drumRatioEl) drumRatioEl.value = pat.tempoRatio || '1:1';
     const bpmWrap = document.getElementById('drum-ed-bpm-wrap');
     if (bpmWrap) {
       bpmWrap.style.display = (pat.syncMaster !== false) ? 'none' : 'flex';
@@ -462,6 +490,7 @@ export const AppEditorsMixin = {
     const syncCheck = document.getElementById('bass-ed-sync');
     const bpmWrap = document.getElementById('bass-ed-bpm-wrap');
     const bpmInput = document.getElementById('bass-ed-bpm');
+    const ratioSelect = document.getElementById('bass-ed-ratio');
     const tsNumSelect = document.getElementById('bass-ed-ts-num');
     const tsDenSelect = document.getElementById('bass-ed-ts-den');
     const resSelect = document.getElementById('bass-ed-res');
@@ -480,7 +509,12 @@ export const AppEditorsMixin = {
         const synced = e.target.checked;
         bpmWrap.style.display = synced ? 'none' : 'flex';
         const pat = this.getPatternById(this.editingPatternId);
-        if (pat) pat.syncMaster = synced;
+        if (pat) {
+          pat.syncMaster = synced;
+          if (!synced) {
+            this.log(`[SYNC WARNING] ${pat.id} unlocked from Master Tempo (${pat.bpm || 120} BPM). Consider using Tempo Ratio to stay locked when Master BPM changes.`);
+          }
+        }
       });
     }
 
@@ -490,6 +524,15 @@ export const AppEditorsMixin = {
         e.target.value = val;
         const pat = this.getPatternById(this.editingPatternId);
         if (pat) pat.bpm = val;
+      });
+    }
+
+    if (ratioSelect) {
+      ratioSelect.addEventListener('change', (e) => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat) return;
+        pat.tempoRatio = e.target.value || '1:1';
+        this.log(`[BASS EDITOR] Tempo Ratio -> ${pat.tempoRatio}`);
       });
     }
 
@@ -610,6 +653,8 @@ export const AppEditorsMixin = {
 
     document.getElementById('bass-ed-sync').checked = pat.syncMaster !== false;
     document.getElementById('bass-ed-bpm').value = pat.bpm || 120;
+    const bassRatioEl = document.getElementById('bass-ed-ratio');
+    if (bassRatioEl) bassRatioEl.value = pat.tempoRatio || '1:1';
     const bpmWrap = document.getElementById('bass-ed-bpm-wrap');
     if (bpmWrap) {
       bpmWrap.style.display = (pat.syncMaster !== false) ? 'none' : 'flex';
@@ -816,6 +861,7 @@ export const AppEditorsMixin = {
     const syncCheck = document.getElementById('chord-ed-sync');
     const bpmWrap = document.getElementById('chord-ed-bpm-wrap');
     const bpmInput = document.getElementById('chord-ed-bpm');
+    const ratioSelect = document.getElementById('chord-ed-ratio');
     const tsNumSelect = document.getElementById('chord-ed-ts-num');
     const tsDenSelect = document.getElementById('chord-ed-ts-den');
     const barsDec = document.getElementById('chord-bars-dec');
@@ -831,7 +877,12 @@ export const AppEditorsMixin = {
         const synced = e.target.checked;
         bpmWrap.style.display = synced ? 'none' : 'flex';
         const pat = this.getPatternById(this.editingPatternId);
-        if (pat) pat.syncMaster = synced;
+        if (pat) {
+          pat.syncMaster = synced;
+          if (!synced) {
+            this.log(`[SYNC WARNING] ${pat.id} unlocked from Master Tempo (${pat.bpm || 120} BPM). Consider using Tempo Ratio to stay locked when Master BPM changes.`);
+          }
+        }
       });
     }
 
@@ -841,6 +892,15 @@ export const AppEditorsMixin = {
         e.target.value = val;
         const pat = this.getPatternById(this.editingPatternId);
         if (pat) pat.bpm = val;
+      });
+    }
+
+    if (ratioSelect) {
+      ratioSelect.addEventListener('change', (e) => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat) return;
+        pat.tempoRatio = e.target.value || '1:1';
+        this.log(`[CHORD EDITOR] Tempo Ratio -> ${pat.tempoRatio}`);
       });
     }
 
@@ -939,6 +999,8 @@ export const AppEditorsMixin = {
 
     document.getElementById('chord-ed-sync').checked = pat.syncMaster !== false;
     document.getElementById('chord-ed-bpm').value = pat.bpm || 120;
+    const chordRatioEl = document.getElementById('chord-ed-ratio');
+    if (chordRatioEl) chordRatioEl.value = pat.tempoRatio || '1:1';
     const bpmWrap = document.getElementById('chord-ed-bpm-wrap');
     if (bpmWrap) {
       bpmWrap.style.display = (pat.syncMaster !== false) ? 'none' : 'flex';
@@ -1003,17 +1065,18 @@ export const AppEditorsMixin = {
       for (let s = 0; s < slotsInThisBar; s++) {
         const symbol = barChords[s] !== undefined ? barChords[s] : 'Am7';
         const isSilent = this.isSilentChordSymbol(symbol);
+        const parsedInit = isSilent ? { valid: true } : chordDictionary.parseChordSymbol(symbol);
         const analysis = this.analyzeChordModalFunction(symbol);
 
         const slotEl = document.createElement('div');
-        slotEl.className = `chord-beat-slot${isSilent ? ' is-silent' : ''}`;
+        slotEl.className = `chord-beat-slot${isSilent ? ' is-silent' : ''}${!parsedInit.valid ? ' is-invalid-chord' : ''}`;
         slotEl.setAttribute('data-bar-idx', barIdx);
         slotEl.setAttribute('data-slot-idx', s);
         slotEl.innerHTML = `
           <div class="chord-slot-top">
-            <input type="text" class="chord-symbol-input" value="${symbol}" placeholder="Ø (Silent)" title="Enter chord symbol (e.g. Dm7, G7b9, Cmaj7) or leave empty / type O for Silence">
+            <input type="text" class="chord-symbol-input" value="${symbol}" placeholder="Ø (Silent)" title="Enter chord symbol (e.g. Dm7, G7b9, Cmaj7, F/G) or leave empty / type O for Silence">
             <button type="button" class="btn-chord-silence" title="Toggle Silence (O / Empty) on this slot">Ø</button>
-            <span class="chord-valid-check" title="Valid Chord Formula or Silence">✓</span>
+            <span class="chord-valid-check" title="${parsedInit.valid ? 'Valid Chord in Dictionary' : 'Chord not found in dictionary'}">${isSilent ? 'Ø' : (parsedInit.valid ? '✓' : '!')}</span>
           </div>
           <div class="chord-modal-badge">${analysis}</div>
         `;
@@ -1026,17 +1089,26 @@ export const AppEditorsMixin = {
         const applyChordSlotValue = (rawVal) => {
           const val = rawVal.trim();
           const silent = this.isSilentChordSymbol(val);
-          const validChord = /^[A-G][b#]?(m|maj|min|dim|aug|sus|[0-9]|b|#|-|\+)*$/i.test(val) && val.length > 0;
-          const valid = silent || validChord;
+          const parsed = silent ? { valid: true } : chordDictionary.parseChordSymbol(val);
+          const valid = silent || parsed.valid;
 
           checkEl.textContent = silent ? 'Ø' : (valid ? '✓' : '!');
           checkEl.style.color = silent ? 'var(--color-text-dim)' : (valid ? 'var(--color-drums)' : 'var(--color-playing-border)');
+          checkEl.title = silent
+            ? 'Silent / Rest Slot'
+            : (valid ? `${parsed.definition.name} (${parsed.noteNames.join('-')})` : 'Chord not found in dictionary');
           slotEl.classList.toggle('is-silent', silent);
+          slotEl.classList.toggle('is-invalid-chord', !valid);
+          inputEl.title = valid
+            ? 'Enter chord symbol or click to audition'
+            : 'Chord not found in dictionary — open 🎹 CHORDS DICTIONARY to inspect or create it';
 
           if (valid) {
             pat.measures[barIdx][s] = silent ? (val.toUpperCase() === 'O' ? 'O' : '') : val;
             badgeEl.textContent = this.analyzeChordModalFunction(pat.measures[barIdx][s]);
             this.updateChordDisplay(this.activeBarIndex, 0);
+          } else {
+            badgeEl.textContent = '⚠ Chord not found in dictionary';
           }
         };
 
@@ -1080,74 +1152,43 @@ export const AppEditorsMixin = {
 
   analyzeChordModalFunction(symbol) {
     if (this.isSilentChordSymbol(symbol)) return 'SILENCE / N.C. (Rest)';
-    const s = symbol.trim();
-    if (/m7b5|dim/i.test(s)) return 'vii° / iiø Locrian';
-    if (/maj7#11|maj9#11/i.test(s)) return 'IVmaj7 Lydian';
-    if (/maj7|M7/i.test(s)) return 'Imaj7 Ionian';
-    if (/7b9|7#9|7#5|7alt/i.test(s)) return 'V7 Altered';
-    if (/m7|-7/i.test(s)) return 'ii-7 Dorian / vi-7';
-    if (/7/.test(s)) return 'V7 Mixolydian';
-    return 'Modal Triad / Diatonic';
+    const parsed = chordDictionary.parseChordSymbol(symbol);
+    if (parsed.valid && parsed.definition) {
+      return `${parsed.noteNames.join('-')} • ${parsed.definition.name}`;
+    }
+    return '⚠ Chord not found in dictionary';
   },
 
   /**
-   * Convert a chord symbol into MIDI notes, applying both Voicing Style and Octave shift (-4 to +4):
-   * - Pop Triads:   Closed root-position triad/tetrad in 1 octave
+   * Convert a chord symbol into MIDI notes using ChordDictionary + Voicing Style + Octave shift (-4 to +4):
+   * - Pop Triads:   Closed root-position triad/tetrad
    * - Jazz Drop-2:  Drops the 2nd highest note down 1 octave (-12 semitones) for an open jazz spread
-   * - Quartal Open: Stacks 4ths (Root, 4th/11th, b7/7th, 10th) in modal McCoy Tyner style
-   * - Lush Pad:     2-hand wide spread (Root -12 in bass + 5th + 7th + 10th)
+   * - Quartal Open: Spreads inner voices outward in modal style
+   * - Lush Pad:     2-hand wide spread (Bass Root -12 + chord intervals + upper 10th shimmer)
    */
   chordSymbolToMidiNotes(symbol, voicing = 'Jazz Drop-2', octave = 0) {
     if (this.isSilentChordSymbol(symbol)) return [];
+    const parsed = chordDictionary.parseChordSymbol(symbol, { rootOctave: 4 });
+    if (parsed.valid) {
+      return chordDictionary.getVoicedMidiNotes(symbol, voicing, octave);
+    }
+    // Fallback if an unedited legacy slot is played before correction
     const match = /^([A-G][b#]?)(.*)$/.exec((symbol || 'Am7').trim());
     const octOffset = Math.max(-4, Math.min(4, parseInt(octave, 10) || 0)) * 12;
     const baseRoot = (match ? (ROOT_TO_MIDI[match[1]] || 60) : 60) + octOffset;
-    const qual = match ? match[2] : 'm7';
-
-    // 1. Build closed intervals [root=0, 3rd, 5th, 7th, (9th)]
-    let intervals;
-    if (/m7b5/i.test(qual))      intervals = [0, 3, 6, 10];
-    else if (/dim/i.test(qual))  intervals = [0, 3, 6, 9];
-    else if (/maj7|M7/.test(qual)) intervals = [0, 4, 7, 11];
-    else if (/m7|-7/.test(qual)) intervals = [0, 3, 7, 10];
-    else if (/7b9/.test(qual))   intervals = [0, 4, 7, 10, 13];
-    else if (/7#5/.test(qual))   intervals = [0, 4, 8, 10];
-    else if (/7/.test(qual))     intervals = [0, 4, 7, 10];
-    else if (/m/.test(qual))     intervals = [0, 3, 7, 12];
-    else                         intervals = [0, 4, 7, 12];
-
-    // 2. Transform intervals according to Voicing Style
-    let voicedIntervals;
-    if (voicing === 'Pop Triads') {
-      // Compact close-position triad/tetrad
-      voicedIntervals = intervals;
-    } else if (voicing === 'Jazz Drop-2') {
-      // Drop the second-highest voice down 1 octave (-12 semitones)
-      voicedIntervals = [...intervals];
-      const dropIdx = Math.max(0, voicedIntervals.length - 2);
-      voicedIntervals[dropIdx] -= 12;
-      voicedIntervals.sort((a, b) => a - b);
-    } else if (voicing === 'Quartal Open') {
-      // Stacked 4ths: Root (0), 4th (5), 7th (intervals[3] || 10), 10th (intervals[1] + 12)
-      const third = intervals[1] || 3;
-      const seventh = intervals[3] !== undefined ? intervals[3] : 10;
-      voicedIntervals = [0, 5, seventh, third + 12];
-    } else if (voicing === 'Lush Pad') {
-      // Wide two-handed pad: Bass Root (-12), Root (0), 5th (7), 7th, 10th (3rd + 12)
-      const third = intervals[1] || 4;
-      const fifth = intervals[2] || 7;
-      const seventh = intervals[3] !== undefined ? intervals[3] : 11;
-      voicedIntervals = [-12, 0, fifth, seventh, third + 12];
-    } else {
-      voicedIntervals = intervals;
-    }
-
-    // 3. Clamp to valid MIDI note range (12..115)
-    return voicedIntervals.map(iv => Math.max(12, Math.min(115, baseRoot + iv)));
+    return [baseRoot, baseRoot + 4, baseRoot + 7, baseRoot + 10];
   },
 
   getChordRootMidi(symbol) {
-    const match = /^([A-G][b#]?)/.exec(symbol.trim());
+    if (this.isSilentChordSymbol(symbol)) return 60;
+    const parsed = chordDictionary.parseChordSymbol(symbol, { rootOctave: 4 });
+    if (parsed.valid) {
+      if (parsed.bassOffset) {
+        return 60 + ((parsed.rootSemitone + parsed.bassOffset) % 12);
+      }
+      return parsed.rootMidi;
+    }
+    const match = /^([A-G][b#]?)/.exec((symbol || '').trim());
     return match ? (ROOT_TO_MIDI[match[1]] || 60) : 60;
   },
 

@@ -1,0 +1,715 @@
+/* ============================================================================
+ * AutoBand - Chord Dictionary & Voicing Explorer Modal Styles
+ * Hardware-themed high-contrast dark UI (#00ff88 Tech Green, #ffaa00 Amber/Gold)
+ * ============================================================================ */
+
+#modal-chords-dict .modal-box.chord-dict-modal-box {
+  max-width: 1020px;
+  width: 96vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid rgba(0, 255, 136, 0.35);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 255, 136, 0.12);
+  background: #101218;
+  overflow: hidden;
+}
+
+.chord-dict-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #191d27 0%, #12151d 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chord-dict-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chord-dict-title-wrap h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  color: #00ff88;
+  text-transform: uppercase;
+}
+
+.chord-dict-count-badge {
+  background: rgba(0, 255, 136, 0.14);
+  color: #00ff88;
+  border: 1px solid rgba(0, 255, 136, 0.35);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-family: monospace;
+  font-weight: 700;
+}
+
+.chord-dict-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 1. Search, Filter & Action Toolbar */
+.chord-dict-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  background: #161922;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chord-dict-search-group {
+  display: flex;
+  flex: 1;
+  min-width: 260px;
+  gap: 8px;
+  align-items: center;
+}
+
+.chord-dict-search-input {
+  flex: 1;
+  background: #0b0d12;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f0f4f8;
+  padding: 7px 11px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.chord-dict-search-input:focus {
+  border-color: #00ff88;
+  box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.18);
+}
+
+.chord-dict-cat-select {
+  background: #0b0d12;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #00ff88;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.chord-dict-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cd-btn {
+  background: #1e2330;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 6px 11px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cd-btn:hover {
+  background: #283042;
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
+
+.cd-btn-primary {
+  background: rgba(0, 255, 136, 0.16);
+  color: #00ff88;
+  border-color: rgba(0, 255, 136, 0.45);
+}
+
+.cd-btn-primary:hover {
+  background: rgba(0, 255, 136, 0.28);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.25);
+}
+
+.cd-btn-amber {
+  background: rgba(255, 170, 0, 0.16);
+  color: #ffaa00;
+  border-color: rgba(255, 170, 0, 0.45);
+}
+
+.cd-btn-amber:hover {
+  background: rgba(255, 170, 0, 0.28);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 170, 0, 0.25);
+}
+
+.cd-btn-danger {
+  background: rgba(255, 51, 102, 0.14);
+  color: #ff3366;
+  border-color: rgba(255, 51, 102, 0.4);
+}
+
+.cd-btn-danger:hover {
+  background: rgba(255, 51, 102, 0.28);
+  color: #fff;
+}
+
+/* 2. Interactive Interval Reference Ruler (-24 to +24) */
+.chord-dict-ruler-panel {
+  background: #151821;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.chord-dict-ruler-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chord-dict-ruler-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chord-dict-ruler-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chord-dict-root-select {
+  background: #0b0d12;
+  color: #00ff88;
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-weight: 700;
+  font-family: monospace;
+  font-size: 0.82rem;
+}
+
+.chord-dict-ruler-strip {
+  display: flex;
+  overflow-x: auto;
+  gap: 2px;
+  padding: 6px 4px;
+  background: #0b0d12;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+}
+
+.cd-ruler-cell {
+  min-width: 34px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #161a24;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease;
+  font-family: monospace;
+}
+
+.cd-ruler-cell:hover {
+  border-color: #00ff88;
+  transform: translateY(-1px);
+}
+
+.cd-ruler-cell .cd-ruler-top {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.cd-ruler-cell .cd-ruler-sub {
+  font-size: 0.62rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.cd-ruler-cell.is-octave-mark {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: #1c2130;
+}
+
+.cd-ruler-cell.is-root-zero {
+  border-color: #00ff88;
+  background: rgba(0, 255, 136, 0.18);
+}
+
+.cd-ruler-cell.is-root-zero .cd-ruler-top,
+.cd-ruler-cell.is-root-zero .cd-ruler-sub {
+  color: #00ff88;
+}
+
+.cd-ruler-cell.is-active-interval {
+  background: rgba(255, 170, 0, 0.24);
+  border-color: #ffaa00;
+  box-shadow: 0 0 8px rgba(255, 170, 0, 0.3);
+}
+
+.cd-ruler-cell.is-active-interval .cd-ruler-top,
+.cd-ruler-cell.is-active-interval .cd-ruler-sub {
+  color: #ffaa00;
+}
+
+.cd-ruler-cell.is-root-zero.is-active-interval {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.28), rgba(255, 170, 0, 0.28));
+  border-color: #00ff88;
+}
+
+.cd-ruler-cell.is-bass-offset {
+  box-shadow: inset 0 -3px 0 #ff3366;
+}
+
+/* 3. Chord Inspector & 2-Octave Virtual Piano Split Grid */
+.chord-dict-inspector-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 12px;
+  background: #151821;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+@media (max-width: 820px) {
+  .chord-dict-inspector-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cd-inspector-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cd-inspector-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.cd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cd-field label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.cd-field input,
+.cd-field select {
+  background: #0b0d12;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+.cd-field input:focus,
+.cd-field select:focus {
+  border-color: #00ff88;
+  outline: none;
+}
+
+/* Interactive Semitone Slot Pills */
+.cd-slots-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  background: #0b0d12;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 40px;
+}
+
+.cd-slot-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 170, 0, 0.15);
+  border: 1px solid rgba(255, 170, 0, 0.5);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: #ffaa00;
+  font-family: monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.cd-slot-pill.is-root-pill {
+  background: rgba(0, 255, 136, 0.16);
+  border-color: rgba(0, 255, 136, 0.55);
+  color: #00ff88;
+}
+
+.cd-slot-input {
+  width: 42px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 1px;
+}
+
+.cd-slot-input:focus {
+  outline: 1px solid #00ff88;
+  border-radius: 3px;
+}
+
+.cd-slot-note-tag {
+  font-size: 0.68rem;
+  opacity: 0.85;
+  padding-right: 2px;
+}
+
+.cd-slot-remove {
+  background: transparent;
+  border: none;
+  color: #ff3366;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0 3px;
+  line-height: 1;
+}
+
+.cd-slot-remove:hover {
+  color: #ffffff;
+}
+
+.cd-inspector-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 2-Octave Virtual Piano Monitor (C3 - C5) */
+.cd-piano-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #0d1017;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.cd-piano-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.cd-piano-resolved-notes {
+  font-family: monospace;
+  font-weight: 700;
+  color: #ffaa00;
+  font-size: 0.82rem;
+}
+
+.cd-piano-keyboard {
+  position: relative;
+  display: flex;
+  height: 118px;
+  background: #06070a;
+  padding: 4px;
+  border-radius: 6px;
+  user-select: none;
+  overflow: hidden;
+}
+
+.cd-piano-key-white {
+  position: relative;
+  flex: 1;
+  background: linear-gradient(180deg, #e2e8f0 0%, #f8fafc 85%, #cbd5e1 100%);
+  border: 1px solid #334155;
+  border-radius: 0 0 4px 4px;
+  margin: 0 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 5px;
+  cursor: pointer;
+  z-index: 1;
+  transition: background 0.1s ease;
+}
+
+.cd-piano-key-white:hover {
+  background: #ffffff;
+}
+
+.cd-piano-key-white .cd-key-label {
+  font-size: 0.6rem;
+  font-family: monospace;
+  font-weight: 700;
+  color: #334155;
+}
+
+.cd-piano-key-black {
+  position: absolute;
+  top: 4px;
+  width: 5.2%;
+  height: 62%;
+  background: linear-gradient(180deg, #1e293b 0%, #090d16 100%);
+  border: 1px solid #000;
+  border-radius: 0 0 4px 4px;
+  z-index: 3;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  transform: translateX(-50%);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.6);
+}
+
+.cd-piano-key-black .cd-key-label {
+  font-size: 0.55rem;
+  font-family: monospace;
+  color: #94a3b8;
+}
+
+.cd-piano-key-white.is-chord-tone {
+  background: linear-gradient(180deg, #ffcf66 0%, #ffaa00 100%);
+  border-color: #d97706;
+  box-shadow: inset 0 0 8px rgba(255, 170, 0, 0.6);
+}
+
+.cd-piano-key-white.is-chord-tone .cd-key-label {
+  color: #0b0d12;
+  font-weight: 900;
+}
+
+.cd-piano-key-black.is-chord-tone {
+  background: linear-gradient(180deg, #ffaa00 0%, #b45309 100%);
+  border-color: #fde68a;
+}
+
+.cd-piano-key-black.is-chord-tone .cd-key-label {
+  color: #0b0d12;
+  font-weight: 900;
+}
+
+.cd-piano-key-white.is-root-tone,
+.cd-piano-key-black.is-root-tone {
+  background: linear-gradient(180deg, #34d399 0%, #00ff88 100%) !important;
+  border-color: #059669 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.cd-piano-key-white.is-root-tone .cd-key-label,
+.cd-piano-key-black.is-root-tone .cd-key-label {
+  color: #062819 !important;
+  font-weight: 900;
+}
+
+.cd-piano-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+
+.cd-legend-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* 4. Chord Library Table */
+.chord-dict-table-wrap {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #0d1017;
+}
+
+.chord-dict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.chord-dict-table thead th {
+  position: sticky;
+  top: 0;
+  background: #181c26;
+  color: #94a3b8;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 2;
+}
+
+.chord-dict-table tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.chord-dict-table tbody tr:hover {
+  background: rgba(0, 255, 136, 0.07);
+}
+
+.chord-dict-table tbody tr.is-selected-row {
+  background: rgba(0, 255, 136, 0.15);
+}
+
+.chord-dict-table td {
+  padding: 7px 10px;
+  color: #e2e8f0;
+  vertical-align: middle;
+}
+
+.cd-col-symbol {
+  font-family: monospace;
+  font-weight: 700;
+  color: #00ff88 !important;
+  font-size: 0.88rem;
+}
+
+.cd-cat-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+.cd-cat-pill.cat-custom {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffaa00;
+  border: 1px solid rgba(255, 170, 0, 0.4);
+}
+
+.cd-row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cd-icon-btn {
+  background: #1c2230;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.cd-icon-btn:hover {
+  background: #2b3548;
+  color: #00ff88;
+  border-color: #00ff88;
+}
+
+.cd-icon-btn.cd-del-btn:hover {
+  color: #ff3366;
+  border-color: #ff3366;
+}
+
+/* 5. Collapsible Notation Cheatsheet */
+.chord-dict-cheatsheet {
+  background: #141821;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.chord-dict-cheatsheet summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #ffaa00;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.cd-cheatsheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Chord Editor Invalid Slot Highlighting */
+.chord-beat-slot.is-invalid-chord {
+  border-color: #ff3366 !important;
+  box-shadow: 0 0 10px rgba(255, 51, 102, 0.35) !important;
+  background: rgba(255, 51, 102, 0.08) !important;
+}
+
+.chord-beat-slot.is-invalid-chord .chord-text-input {
+  color: #ff6688 !important;
+}

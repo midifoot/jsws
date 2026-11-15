@@ -1,11 +1,15 @@
-const CACHE_NAME = 'autoband-core-v13';
+const CACHE_NAME = 'autoband-core-v15';
 
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './styles/ui-main.css',
+  './src/ui/styles/chord-dictionary.css',
   './src/defaults.js',
+  './src/theory/defaultChords.json',
+  './src/theory/ChordDictionary.js',
+  './src/ui/ChordDictionaryModal.js',
   './src/TimingEngine.js',
   './src/MidiBridge.js',
   './src/SoundFontManager.js',

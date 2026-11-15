@@ -5,8 +5,21 @@ import {
   DEFAULT_GM_PRESETS,
   DEFAULT_DRUM_VELOCITIES,
   DEFAULT_DRUM_SLOTS,
-  GM_DRUM_CATALOG
+  GM_DRUM_CATALOG,
+  DEFAULT_TIME_SIG_SYNC_MODE,
+  TIME_SIG_SYNC_MODES,
+  parseTempoRatio
 } from './defaults.js';
+
+const PITCH_TO_MIDI = {
+  C1: 24, 'C#1': 25, Db1: 25, D1: 26, 'D#1': 27, Eb1: 27, E1: 28, F1: 29, 'F#1': 30, Gb1: 30, G1: 31, 'G#1': 32, Ab1: 32, A1: 33, 'A#1': 34, Bb1: 34, B1: 35,
+  C2: 36, 'C#2': 37, Db2: 37, D2: 38, 'D#2': 39, Eb2: 39, E2: 40, F2: 41, 'F#2': 42, Gb2: 42, G2: 43, 'G#2': 44, Ab2: 44, A2: 45, 'A#2': 46, Bb2: 46, B2: 47,
+  C3: 48, 'C#3': 49, Db3: 49, D3: 50, 'D#3': 51, Eb3: 51, E3: 52, F3: 53, 'F#3': 54, Gb3: 54, G3: 55
+};
+const DEGREE_TO_OFFSET = {
+  '-5': -5, '-b6': -4, '-6': -3, '-b7': -2, '-7': -1,
+  R: 0, b2: 1, '2': 2, b3: 3, '3': 4, '4': 5, b5: 6, '5': 7, b6: 8, '6': 9, b7: 10, '7': 11, R8: 12
+};
 
 export const AppSettingsModalsMixin = {
   // --- 6. View 3: System Settings Controls (MIDI/SF2 Chooser + 10-Slot Drum Mapper) ---
@@ -25,6 +38,39 @@ export const AppSettingsModalsMixin = {
     const btnResetDrumVel = document.getElementById('btn-reset-drum-velocities');
 
     this.updateDrumVelocityLegend();
+    this.updateSyncModeUI();
+    this.evaluateAndRenderSyncStatus(false);
+
+    // Bind Time Signature & Polyrhythm Sync Mode radio cards in System Settings
+    document.querySelectorAll('input[name="timesig-sync-mode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        const mode = e.target.value;
+        if (TIME_SIG_SYNC_MODES[mode]) {
+          this.timeSigSyncMode = mode;
+          this.updateSyncModeUI();
+          this.evaluateAndRenderSyncStatus(true);
+          this.saveWorkspaceToLocalStorage();
+          if (this.engine && this.engine.isPlaying && this.engine.audioCtx) {
+            this.resetTrackClocks(this.engine.audioCtx.currentTime);
+          }
+          this.log(`[SETTINGS] Time Signature Sync Mode -> ${TIME_SIG_SYNC_MODES[mode].title}`);
+        }
+      });
+    });
+
+    // Clicking the Sync Mode pill on the Main Stage jumps to System Settings
+    const stageSyncPill = document.getElementById('stage-sync-mode-pill');
+    if (stageSyncPill) {
+      stageSyncPill.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab-btn').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('data-target') === 'view-settings');
+        });
+        document.querySelectorAll('.view-container').forEach(v => {
+          v.classList.toggle('active', v.id === 'view-settings');
+        });
+        this.log('[UI] Switched to System Settings (Time Signature & Polyrhythm Sync)');
+      });
+    }
 
     const bindVelInput = (inpEl, key, label) => {
       if (!inpEl) return;
@@ -282,8 +328,12 @@ export const AppSettingsModalsMixin = {
 
     document.querySelectorAll('.btn-open-chords-dict').forEach(btn => {
       btn.addEventListener('click', () => {
-        dictModal.classList.add('open');
-        this.log('[UI] Opened Chords Dictionary Modal');
+        if (this.chordDictModal) {
+          this.chordDictModal.open();
+        } else if (dictModal) {
+          dictModal.classList.add('open');
+        }
+        this.log('[UI] Opened Chords Dictionary & Voicing Explorer Modal');
       });
     });
 
@@ -428,5 +478,446 @@ export const AppSettingsModalsMixin = {
   getPatternById(id) {
     return this.patterns.find(p => p.id === id) || null;
   },
+
+  // --- 8. Time Signature, Polyrhythm & Tempo Ratio Sync Engine ---
+  updateSyncModeUI() {
+    const mode = this.timeSigSyncMode || DEFAULT_TIME_SIG_SYNC_MODE;
+    const modeObj = TIME_SIG_SYNC_MODES[mode] || TIME_SIG_SYNC_MODES[DEFAULT_TIME_SIG_SYNC_MODE];
+
+    document.querySelectorAll('.sync-mode-card').forEach(card => {
+      const cardMode = card.getAttribute('data-sync-mode');
+      const isSelected = cardMode === mode;
+      card.classList.toggle('active', isSelected);
+      const radio = card.querySelector('input[type="radio"]');
+      if (radio) radio.checked = isSelected;
+    });
+
+    const settingsBadge = document.getElementById('settings-sync-mode-badge');
+    if (settingsBadge) {
+      settingsBadge.textContent = modeObj.shortLabel;
+    }
+
+    const stagePill = document.getElementById('stage-sync-mode-pill');
+    if (stagePill) {
+      stagePill.textContent = `Sync: ${modeObj.shortLabel}`;
+    }
+  },
+
+  evaluateAndRenderSyncStatus(logWarnings = false) {
+    const banner = document.getElementById('stage-sync-banner');
+    if (!banner) return;
+
+    const mode = this.timeSigSyncMode || DEFAULT_TIME_SIG_SYNC_MODE;
+    const modeObj = TIME_SIG_SYNC_MODES[mode] || TIME_SIG_SYNC_MODES[DEFAULT_TIME_SIG_SYNC_MODE];
+    const maxSlots = Math.max(
+      this.tracks.drums.slots.length,
+      this.tracks.bass.slots.length,
+      this.tracks.chords.slots.length,
+      1
+    );
+
+    const mixedSlotDetails = [];
+    const customTempoPats = [];
+    const ratioPats = [];
+    const seqMeters = [];
+
+    for (let i = 0; i < maxSlots; i++) {
+      const dPat = this.getPatternById(this.tracks.drums.slots[i % Math.max(1, this.tracks.drums.slots.length)]?.patternId);
+      const bPat = this.getPatternById(this.tracks.bass.slots[i % Math.max(1, this.tracks.bass.slots.length)]?.patternId);
+      const cPat = this.getPatternById(this.tracks.chords.slots[i % Math.max(1, this.tracks.chords.slots.length)]?.patternId);
+
+      const dTs = dPat?.timeSig || '4/4';
+      const bTs = bPat?.timeSig || '4/4';
+      const cTs = cPat?.timeSig || '4/4';
+
+      if (dTs !== bTs || dTs !== cTs) {
+        mixedSlotDetails.push(`Slot #${i + 1} (Drums ${dTs}, Bass ${bTs}, Chords ${cTs})`);
+      } else if (i === 0 || seqMeters[seqMeters.length - 1] !== dTs) {
+        seqMeters.push(dTs);
+      }
+    }
+
+    ['drums', 'bass', 'chords'].forEach(tk => {
+      this.tracks[tk].slots.forEach((s, idx) => {
+        const p = this.getPatternById(s.patternId);
+        if (!p) return;
+        if (p.syncMaster === false) {
+          customTempoPats.push(`${p.id} (${p.bpm || 120} BPM in ${tk.toUpperCase()} #${idx + 1})`);
+        }
+        if (p.tempoRatio && p.tempoRatio !== '1:1') {
+          ratioPats.push(`${p.id} (Ratio ${p.tempoRatio} in ${tk.toUpperCase()} #${idx + 1})`);
+        }
+      });
+    });
+
+    const messages = [];
+    let isWarning = false;
+
+    if (mixedSlotDetails.length > 0) {
+      isWarning = true;
+      if (mode === 'bar-fit') {
+        messages.push(`⚡ <strong>POLYRHYTHM BAR-FIT ACTIVE:</strong> Mixed time signatures detected in ${mixedSlotDetails.join(' • ')}. Bass &amp; Chords bars are time-stretched to fit the Master (Drum) bar duration.`);
+      } else if (mode === 'independent') {
+        messages.push(`⚠ <strong>POLYMETRIC PHASING ACTIVE:</strong> Mixed time signatures detected in ${mixedSlotDetails.join(' • ')}. Tracks advance on their own clocks (${modeObj.shortLabel}). Set a Tempo Ratio (e.g. <code>3:2</code> or <code>3:4</code>) or switch to <em>Auto Bar-Fit</em> in System Settings to lock barlines.`);
+      } else {
+        messages.push(`⚠ <strong>MASTER BAR RESET ACTIVE:</strong> Mixed time signatures detected in ${mixedSlotDetails.join(' • ')}. Bass &amp; Chords will hard-reset/truncate on every Master (Drum) bar boundary.`);
+      }
+    } else if (seqMeters.length > 1) {
+      messages.push(`✓ <strong>SEQUENTIAL METER CHANGE:</strong> All tracks transition together across slots (${seqMeters.join(' → ')}) with locked bar boundaries.`);
+    }
+
+    if (ratioPats.length > 0) {
+      messages.push(`🎵 <strong>TEMPO RATIO ACTIVE:</strong> ${[...new Set(ratioPats)].join(', ')} (locked proportionally to Master BPM).`);
+    }
+
+    if (customTempoPats.length > 0) {
+      isWarning = true;
+      messages.push(`⚠ <strong>UN-SYNCED PATTERN BPM:</strong> ${[...new Set(customTempoPats)].join(', ')} unlocked from Master Tempo. Moving the Master BPM slider will shift relative sync.`);
+    }
+
+    if (messages.length === 0) {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+      return;
+    }
+
+    banner.style.display = 'block';
+    banner.className = `stage-sync-banner ${isWarning ? '' : 'is-info'}`;
+    banner.innerHTML = messages.join('<br>');
+
+    if (logWarnings && isWarning) {
+      this.log(`[SYNC NOTICE] ${messages[0].replace(/<[^>]+>/g, '')}`);
+    }
+  },
+
+  getPatternQuarterSec(pat, masterTempo = 120) {
+    const baseBpm = (pat && pat.syncMaster === false && pat.bpm)
+      ? Math.max(40, Math.min(280, parseFloat(pat.bpm) || masterTempo))
+      : masterTempo;
+    const ratio = parseTempoRatio(pat?.tempoRatio || '1:1');
+    const effBpm = Math.max(20, Math.min(600, baseBpm * ratio));
+    return 60.0 / effBpm;
+  },
+
+  getPatternBarDurationSec(pat, masterTempo = 120) {
+    const { upper, lower } = this.parseTimeSig(pat?.timeSig || '4/4');
+    const quartersInBar = lower === 8 ? (upper * 0.5) : upper;
+    return quartersInBar * this.getPatternQuarterSec(pat, masterTempo);
+  },
+
+  resetTrackClocks(startTime = 0) {
+    const masterTempo = parseFloat(this.engine?.tempo) || 120;
+    const dPat0 = this.getPatternById(this.tracks.drums.slots[0]?.patternId);
+    const initialMasterBarSec = this.getPatternBarDurationSec(dPat0, masterTempo);
+
+    this.masterClock = {
+      barIndex: 0,
+      beatInBar: 0,
+      nextBeatTime: startTime,
+      barStartTime: startTime,
+      barDurationSecs: initialMasterBarSec
+    };
+
+    this.trackClocks = {
+      drums:  { barIndex: 0, stepInBar: 0, nextStepTime: startTime },
+      bass:   { barIndex: 0, stepInBar: 0, nextStepTime: startTime },
+      chords: { barIndex: 0, stepInBar: 0, nextStepTime: startTime }
+    };
+
+    this.activeChordSymbolLive = 'Am7';
+  },
+
+  scheduleMultiSigBeat(pulseNumber, beatTime) {
+    if (pulseNumber === 0 || !this.masterClock || !this.trackClocks) {
+      this.resetTrackClocks(beatTime);
+    }
+
+    const masterTempo = parseFloat(this.engine.tempo) || 120;
+    const secPerQuarter = 60.0 / masterTempo;
+    const windowEnd = beatTime + secPerQuarter;
+    const nowCtx = this.engine.audioCtx ? this.engine.audioCtx.currentTime : 0;
+    const syncMode = this.timeSigSyncMode || DEFAULT_TIME_SIG_SYNC_MODE;
+
+    const anySolo = Object.values(this.tracks).some(t => t.solo);
+    const isTrackAudible = (trackKey) => {
+      const t = this.tracks[trackKey];
+      if (t.muted) return false;
+      if (anySolo && !t.solo) return false;
+      return true;
+    };
+
+    // 1. Advance Master (Drum) Bar & Beat Clock through [beatTime, windowEnd]
+    let guardMaster = 0;
+    while (this.masterClock.nextBeatTime < windowEnd - 1e-5 && guardMaster++ < 64) {
+      const tBeat = this.masterClock.nextBeatTime;
+      const mBarIdx = this.masterClock.barIndex;
+      const dSlots = this.tracks.drums.slots;
+      const dPat = dSlots.length > 0
+        ? this.getPatternById(dSlots[mBarIdx % dSlots.length]?.patternId)
+        : null;
+
+      const stageTimeSig = dPat?.timeSig || '4/4';
+      const { upper: stageUpper, lower: stageLower } = this.parseTimeSig(stageTimeSig);
+      const dQuarterSec = this.getPatternQuarterSec(dPat, masterTempo);
+      const beatUnitSec = stageLower === 8 ? (dQuarterSec * 0.5) : dQuarterSec;
+
+      if (this.masterClock.beatInBar === 0) {
+        this.masterClock.barStartTime = tBeat;
+        this.masterClock.barDurationSecs = stageUpper * beatUnitSec;
+
+        // In Mode 1 ('bar-fit') and Mode 3 ('master-reset'), lock Bass & Chords to the Master Bar start
+        if (syncMode === 'bar-fit' || syncMode === 'master-reset') {
+          ['bass', 'chords'].forEach(tk => {
+            const tc = this.trackClocks[tk];
+            tc.barIndex = mBarIdx;
+            tc.stepInBar = 0;
+            tc.nextStepTime = tBeat;
+          });
+        }
+      }
+
+      const beatNum = this.masterClock.beatInBar + 1;
+      const delayMs = Math.max(0, (tBeat - nowCtx) * 1000);
+      const capturedBarIdx = mBarIdx;
+      const capturedUpper = stageUpper;
+
+      setTimeout(() => {
+        if (!this.engine.isPlaying) return;
+        this.activeBeatInBar = beatNum;
+        this.activeBarIndex = capturedBarIdx;
+
+        const pulseLed = document.getElementById('pulse-indicator');
+        if (pulseLed) {
+          pulseLed.className = 'beat-pulse-led pulse-beat';
+          pulseLed.textContent = `${beatNum}/${capturedUpper}`;
+          setTimeout(() => {
+            if (this.engine.isPlaying) pulseLed.className = 'beat-pulse-led';
+          }, 95);
+        }
+
+        if (syncMode !== 'independent') {
+          this.highlightPlayingSlots(capturedBarIdx);
+          this.updateChordDisplay(capturedBarIdx, beatNum - 1, capturedUpper);
+        }
+      }, delayMs);
+
+      this.masterClock.nextBeatTime += beatUnitSec;
+      this.masterClock.beatInBar++;
+      if (this.masterClock.beatInBar >= stageUpper) {
+        this.masterClock.beatInBar = 0;
+        this.masterClock.barIndex++;
+      }
+    }
+
+    // Helper to highlight a single track's active Loop Slot when running in Independent Polymetric mode
+    const scheduleTrackSlotHighlight = (trackKey, trackBarIdx, tEvent) => {
+      if (syncMode !== 'independent') return;
+      const slots = this.tracks[trackKey].slots;
+      if (!slots.length) return;
+      const activeIdx = trackBarIdx % slots.length;
+      const delayMs = Math.max(0, (tEvent - nowCtx) * 1000);
+      setTimeout(() => {
+        if (!this.engine.isPlaying) return;
+        document.querySelectorAll(`.pattern-slot-box[data-track="${trackKey}"].is-playing`).forEach(el => {
+          el.classList.remove('is-playing');
+        });
+        const box = document.querySelector(`.pattern-slot-box[data-track="${trackKey}"][data-slot-index="${activeIdx}"]`);
+        if (box) box.classList.add('is-playing');
+      }, delayMs);
+    };
+
+    // 2. Schedule Chords Track Steps in [beatTime, windowEnd]
+    const chordSlots = this.tracks.chords.slots;
+    if (chordSlots.length > 0) {
+      const cc = this.trackClocks.chords;
+      let guardChords = 0;
+      while (cc.nextStepTime < windowEnd - 1e-5 && guardChords++ < 64) {
+        const tStep = cc.nextStepTime;
+        const cBarIdx = cc.barIndex;
+        const cSlot = chordSlots[cBarIdx % chordSlots.length];
+        const cPat = this.getPatternById(cSlot?.patternId);
+
+        if (!cPat || !cPat.measures || cPat.measures.length === 0) {
+          cc.nextStepTime += secPerQuarter;
+          break;
+        }
+
+        const barInPat = cBarIdx % cPat.measures.length;
+        const m = cPat.measures[barInPat] || ['Am7'];
+        const chordsInBar = Math.max(1, m.length);
+        const chordSlotIdx = Math.min(chordsInBar - 1, cc.stepInBar);
+
+        const barDurSec = syncMode === 'bar-fit'
+          ? this.masterClock.barDurationSecs
+          : this.getPatternBarDurationSec(cPat, masterTempo);
+        const slotDurSec = Math.max(0.05, barDurSec / chordsInBar);
+
+        const sym = m[chordSlotIdx] !== undefined ? m[chordSlotIdx] : 'Am7';
+        this.activeChordSymbolLive = sym;
+        const isSilent = this.isSilentChordSymbol(sym);
+
+        if (cc.stepInBar === 0) {
+          scheduleTrackSlotHighlight('chords', cBarIdx, tStep);
+        }
+
+        if (isTrackAudible('chords') && !isSilent) {
+          const midiNotes = this.chordSymbolToMidiNotes(
+            sym,
+            cPat.voicing || 'Jazz Drop-2',
+            cPat.octave || 0
+          );
+          const chordDur = slotDurSec * 0.92;
+          midiNotes.forEach(note => {
+            this.midiBridge.sendNoteOn('chords', note, 85, tStep, chordDur);
+          });
+        }
+
+        const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
+        const capturedBarIdx = cBarIdx;
+        const capturedSlotIdx = chordSlotIdx;
+        const capturedTotalSlots = chordsInBar;
+        const capturedBarInPat = barInPat;
+        const capturedPatId = cPat.id;
+
+        setTimeout(() => {
+          if (!this.engine.isPlaying) return;
+          if (syncMode === 'independent') {
+            this.updateChordDisplay(capturedBarIdx, capturedSlotIdx, capturedTotalSlots);
+          }
+          if (this.editingPatternId === capturedPatId) {
+            this.highlightChordEditorSlot(capturedBarInPat, capturedSlotIdx);
+          }
+        }, stepDelay);
+
+        cc.nextStepTime += slotDurSec;
+        cc.stepInBar++;
+        if (cc.stepInBar >= chordsInBar) {
+          cc.stepInBar = 0;
+          cc.barIndex++;
+        }
+      }
+    }
+
+    // 3. Schedule Drums Track Steps in [beatTime, windowEnd]
+    const drumSlots = this.tracks.drums.slots;
+    if (drumSlots.length > 0) {
+      const dc = this.trackClocks.drums;
+      let guardDrums = 0;
+      while (dc.nextStepTime < windowEnd - 1e-5 && guardDrums++ < 128) {
+        const tStep = dc.nextStepTime;
+        const dBarIdx = dc.barIndex;
+        const dSlot = drumSlots[dBarIdx % drumSlots.length];
+        const dPat = this.getPatternById(dSlot?.patternId);
+
+        if (!dPat || !dPat.drumGrid) {
+          dc.nextStepTime += secPerQuarter;
+          break;
+        }
+
+        const stepsPerBar = Math.max(1, this.getStepsPerBar(dPat.timeSig || '4/4', dPat.resolution || '1/16'));
+        const totalSteps = Math.max(1, this.getTotalSteps(dPat));
+        const barInPat = dBarIdx % Math.max(1, dPat.bars || 1);
+        const stepIndex = ((barInPat * stepsPerBar) + dc.stepInBar) % totalSteps;
+
+        const barDurSec = this.getPatternBarDurationSec(dPat, masterTempo);
+        const dStepDur = Math.max(0.02, barDurSec / stepsPerBar);
+        const anyRowSolo = dPat.rowSolos && dPat.rowSolos.some(Boolean);
+
+        if (dc.stepInBar === 0) {
+          scheduleTrackSlotHighlight('drums', dBarIdx, tStep);
+        }
+
+        if (isTrackAudible('drums')) {
+          this.drumSlots.forEach((inst, rowIdx) => {
+            if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
+            if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
+            const state = dPat.drumGrid[rowIdx] && dPat.drumGrid[rowIdx][stepIndex];
+            if (state > 0) {
+              const vel = this.getDrumStepVelocity(state);
+              const dur = state === 2 ? 0.18 : (state === 1 ? 0.15 : 0.12);
+              this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, tStep, dur);
+            }
+          });
+        }
+
+        if (this.editingPatternId === dPat.id) {
+          const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
+          const capturedStepIdx = stepIndex;
+          setTimeout(() => {
+            if (this.engine.isPlaying) this.highlightEditorStep('drums', capturedStepIdx);
+          }, stepDelay);
+        }
+
+        dc.nextStepTime += dStepDur;
+        dc.stepInBar++;
+        if (dc.stepInBar >= stepsPerBar) {
+          dc.stepInBar = 0;
+          dc.barIndex++;
+        }
+      }
+    }
+
+    // 4. Schedule Bass Track Steps in [beatTime, windowEnd]
+    const bassSlots = this.tracks.bass.slots;
+    if (bassSlots.length > 0) {
+      const bc = this.trackClocks.bass;
+      let guardBass = 0;
+      while (bc.nextStepTime < windowEnd - 1e-5 && guardBass++ < 128) {
+        const tStep = bc.nextStepTime;
+        const bBarIdx = bc.barIndex;
+        const bSlot = bassSlots[bBarIdx % bassSlots.length];
+        const bPat = this.getPatternById(bSlot?.patternId);
+
+        if (!bPat || !bPat.bassSteps) {
+          bc.nextStepTime += secPerQuarter;
+          break;
+        }
+
+        const stepsPerBar = Math.max(1, this.getStepsPerBar(bPat.timeSig || '4/4', bPat.resolution || '1/16'));
+        const totalSteps = Math.max(1, this.getTotalSteps(bPat));
+        const barInPat = bBarIdx % Math.max(1, bPat.bars || 1);
+        const stepIndex = ((barInPat * stepsPerBar) + bc.stepInBar) % totalSteps;
+        const stepObj = bPat.bassSteps[stepIndex];
+
+        const barDurSec = syncMode === 'bar-fit'
+          ? this.masterClock.barDurationSecs
+          : this.getPatternBarDurationSec(bPat, masterTempo);
+        const bStepDur = Math.max(0.02, barDurSec / stepsPerBar);
+
+        const activeChordSym = this.activeChordSymbolLive !== undefined ? this.activeChordSymbolLive : 'Am7';
+        const isActiveChordSilent = this.isSilentChordSymbol(activeChordSym);
+        const isBassSilencedByChord = isActiveChordSilent && bPat.mode !== 'strict';
+        const rootMidi = isActiveChordSilent ? 45 : (this.getChordRootMidi(activeChordSym) - 24);
+
+        if (bc.stepInBar === 0) {
+          scheduleTrackSlotHighlight('bass', bBarIdx, tStep);
+        }
+
+        if (isTrackAudible('bass') && !isBassSilencedByChord && stepObj && !stepObj.rest) {
+          const midiPitch = bPat.mode === 'strict'
+            ? (PITCH_TO_MIDI[stepObj.pitch] ?? 33)
+            : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] ?? 0));
+          const vel = stepObj.accent ? 120 : 92;
+          const dur = Math.max(0.06, bStepDur * (stepObj.gate / 100));
+          this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur);
+        }
+
+        if (this.editingPatternId === bPat.id) {
+          const stepDelay = Math.max(0, (tStep - nowCtx) * 1000);
+          const capturedStepIdx = stepIndex;
+          setTimeout(() => {
+            if (this.engine.isPlaying) this.highlightEditorStep('bass', capturedStepIdx);
+          }, stepDelay);
+        }
+
+        bc.nextStepTime += bStepDur;
+        bc.stepInBar++;
+        if (bc.stepInBar >= stepsPerBar) {
+          bc.stepInBar = 0;
+          bc.barIndex++;
+        }
+      }
+    }
+  }
 };
 

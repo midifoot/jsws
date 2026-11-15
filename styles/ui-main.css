@@ -1993,3 +1993,78 @@ input[type="range"] {
   font-family: var(--font-mono);
 }
 
+/* ==========================================================================
+   TIME SIGNATURE & POLYRHYTHM SYNC BANNER + SETTINGS CARDS
+   ========================================================================== */
+.stage-sync-banner {
+  background: rgba(255, 170, 0, 0.09);
+  border: 1px solid rgba(255, 170, 0, 0.45);
+  border-left: 4px solid var(--color-chords);
+  border-radius: 5px;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+}
+
+.stage-sync-banner.is-info {
+  background: rgba(0, 255, 136, 0.06);
+  border-color: rgba(0, 255, 136, 0.35);
+  border-left-color: var(--color-drums);
+}
+
+.sync-modes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.sync-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-panel);
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.sync-mode-card:hover {
+  border-color: var(--border-focus);
+}
+
+.sync-mode-card.active {
+  border-color: var(--color-drums);
+  background: rgba(0, 255, 136, 0.05);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.12);
+}
+
+.sync-mode-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+}
+
+.sync-mode-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.sync-mode-example {
+  font-size: 0.73rem;
+  color: var(--color-text-dim);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.4rem 0.55rem;
+  border-radius: 4px;
+  border-left: 2px solid var(--color-chords);
+  line-height: 1.35;
+}
+
+
