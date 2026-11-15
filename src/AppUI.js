@@ -903,6 +903,8 @@ export class AppUI {
               ${presetOptionsHtml}
             </select>
 
+            <button class="btn track-test-btn" data-track="${trackKey}" style="padding: 0.25rem 0.55rem; font-size: 0.74rem;" title="Test selected ${track.label} GM Sound">Test</button>
+
             <div class="track-level-wrap">
               <span>LVL</span>
               <input type="range" class="track-level-slider" data-track="${trackKey}" min="0" max="100" value="${track.level}">
@@ -913,8 +915,6 @@ export class AppUI {
               <button class="btn-ms mute-btn ${track.muted ? 'active' : ''}" data-track="${trackKey}" title="Mute ${track.label}">M</button>
               <button class="btn-ms solo-btn ${track.solo ? 'active' : ''}" data-track="${trackKey}" title="Solo ${track.label}">S</button>
             </div>
-
-            <button class="btn track-test-btn" data-track="${trackKey}" style="padding: 0.25rem 0.55rem; font-size: 0.74rem;">Test</button>
 
             <div class="track-level-wrap">
               <span>Loop Size</span>
