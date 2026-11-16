@@ -2130,5 +2130,86 @@ input[type="range"] {
   color: var(--color-chords);
 }
 
+/* ============================================================================
+   10. ALGORITHMIC PATTERN GENERATOR ("GET INSPIRED" TOOLBAR CLUSTER)
+   ============================================================================ */
+.gen-inspire-cluster {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+}
+
+.gen-inspire-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.gen-rand-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--color-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.btn-inspire {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(59, 130, 246, 0.22));
+  border: 1px solid #a855f7;
+  color: #f3e8ff;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  height: 30px;
+  padding: 0 0.7rem;
+  transition: all 0.15s ease;
+}
+
+.btn-inspire:hover {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(59, 130, 246, 0.38));
+  border-color: #c084fc;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-inspire:active {
+  transform: translateY(0);
+}
+
+/* ============================================================================
+   11. PREDICTIVE TENSION ENGINE UI & TELEPROMPTER INDICATORS
+   ============================================================================ */
+.slot-tension-val {
+  cursor: ns-resize;
+  user-select: none;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.slot-tension-val:hover,
+.slot-tension-val.is-dragging {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.slot-tension-val.is-pos-tension {
+  color: var(--color-chords) !important;
+  text-shadow: 0 0 6px rgba(255, 170, 0, 0.35);
+}
+
+.slot-tension-val.is-neg-tension {
+  color: #38bdf8 !important;
+  text-shadow: 0 0 6px rgba(56, 189, 248, 0.35);
+}
+
+.chord-bar-item.is-tension-sub {
+  text-decoration: underline dotted rgba(192, 132, 252, 0.75);
+  text-underline-offset: 4px;
+}
+
+
+
 
 

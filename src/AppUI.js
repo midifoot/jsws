@@ -3,6 +3,7 @@ import { AppSettingsModalsMixin } from './AppSettingsModals.js';
 import { chordDictionary } from './theory/ChordDictionary.js';
 import { ChordDictionaryModal } from './ui/ChordDictionaryModal.js';
 import { AudioExporter } from './engine/AudioExporter.js';
+import { TensionEngine, DEFAULT_TENSION_CONFIG } from './engine/TensionEngine.js';
 /**
  * src/AppUI.js - AutoBand Front-End UI/UX Controller
  * Manages tab navigation, Main Stage loops/palette/snapshots, Unified Pattern Library,
@@ -62,6 +63,9 @@ export class AppUI {
 
     // Global Humanize Impact Settings (configurable in System Settings)
     this.humanizeConfig = { timingWindowMs: 24, velocitySpan: 30 };
+
+    // Global Predictive Tension Engine Settings (configurable in System Settings)
+    this.tensionConfig = { ...DEFAULT_TENSION_CONFIG };
 
     // Pattern Library State (Initialized from src/defaults.js)
     this.patterns = createDefaultPatterns();
@@ -263,6 +267,7 @@ export class AppUI {
       tempo: this.engine ? this.engine.tempo : 120,
       timeSigSyncMode: this.timeSigSyncMode || 'independent',
       humanizeConfig: { ...this.humanizeConfig },
+      tensionConfig: { ...this.tensionConfig },
       drumVelocities: { ...this.drumVelocities },
       drumSlots: this.drumSlots.map(s => ({ ...s })),
       tracks: {
@@ -319,6 +324,16 @@ export class AppUI {
       if (this.midiBridge && typeof this.midiBridge.setHumanizeConfig === 'function') {
         this.midiBridge.setHumanizeConfig(this.humanizeConfig);
       }
+    }
+
+    if (data.tensionConfig && typeof data.tensionConfig === 'object') {
+      this.tensionConfig = {
+        intensityScale: Math.max(25, Math.min(200, parseInt(data.tensionConfig.intensityScale, 10) || 100)),
+        predictiveTransitions: data.tensionConfig.predictiveTransitions !== false,
+        chordSubMode: ['subs', 'extensions', 'comping'].includes(data.tensionConfig.chordSubMode)
+          ? data.tensionConfig.chordSubMode
+          : 'subs'
+      };
     }
 
     if (data.drumVelocities && typeof data.drumVelocities === 'object') {
@@ -826,29 +841,36 @@ export class AppUI {
     const nextSlot = chordSlots[(barIndex + 1) % chordSlots.length];
     const currentPat = this.getPatternById(currentSlot.patternId);
     const nextPat = this.getPatternById(nextSlot.patternId);
+    const nowTension = currentSlot?.tension || 0;
+    const nextTension = nextSlot?.tension || 0;
 
-    let nowMeasure = ['Am7'];
-    let nextMeasure = ['D7'];
+    let rawNowMeasure = ['Am7'];
+    let rawNextMeasure = ['D7'];
     let activeIdxInBar = 0;
 
     if (currentPat && currentPat.measures && currentPat.measures.length > 0) {
       const m = currentPat.measures[barIndex % currentPat.measures.length];
       if (m && m.length > 0) {
-        nowMeasure = m;
+        rawNowMeasure = m;
         activeIdxInBar = Math.min(m.length - 1, Math.floor((beatIndex / Math.max(1, totalBeatsInBar)) * m.length));
       }
     }
     if (nextPat && nextPat.measures && nextPat.measures.length > 0) {
       const nextM = nextPat.measures[(barIndex + 1) % nextPat.measures.length];
       if (nextM && nextM.length > 0) {
-        nextMeasure = nextM;
+        rawNextMeasure = nextM;
       }
     }
 
+    const nowMeasure = TensionEngine.transformBarMeasure(rawNowMeasure, nowTension, barIndex, this.tensionConfig);
+    const nextMeasure = TensionEngine.transformBarMeasure(rawNextMeasure, nextTension, barIndex + 1, this.tensionConfig);
+
     const isLastChordOfCurrentBar = activeIdxInBar >= nowMeasure.length - 1;
+    const nowTensionLabel = nowTension !== 0 ? ` • TENSION ${nowTension > 0 ? `+${nowTension}` : nowTension}` : '';
+    const nextTensionLabel = nextTension !== 0 ? ` • TENSION ${nextTension > 0 ? `+${nextTension}` : nextTension}` : '';
 
     if (nowMeta) {
-      nowMeta.textContent = `NOW • BAR ${barIndex + 1} • BEAT ${beatIndex + 1} / ${totalBeatsInBar}`;
+      nowMeta.textContent = `NOW • BAR ${barIndex + 1} • BEAT ${beatIndex + 1} / ${totalBeatsInBar}${nowTensionLabel}`;
     }
     if (nowSymbol) {
       const countClass = `count-${Math.min(4, Math.max(1, nowMeasure.length))}`;
@@ -856,15 +878,21 @@ export class AppUI {
       nowSymbol.innerHTML = nowMeasure.map((sym, i) => {
         const silent = this.isSilentChordSymbol(sym);
         const label = silent ? 'Ø' : sym;
+        const origSym = rawNowMeasure[i] || sym;
+        const wasSubbed = !silent && sym !== origSym;
         const activeClass = i === activeIdxInBar ? ' is-active' : '';
         const silentClass = silent ? ' is-silent-chord' : '';
+        const subClass = wasSubbed ? ' is-tension-sub' : '';
+        const tip = silent
+          ? 'Silent / N.C.'
+          : (wasSubbed ? `Tension ${nowTension > 0 ? `+${nowTension}` : nowTension} Substitution: ${sym} (written: ${origSym})` : label);
         const sep = i < nowMeasure.length - 1 ? '<span class="chord-bar-sep">·</span>' : '';
-        return `<span class="chord-bar-item${activeClass}${silentClass}" title="${silent ? 'Silent / N.C.' : label}">${label}</span>${sep}`;
+        return `<span class="chord-bar-item${activeClass}${silentClass}${subClass}" title="${tip}">${label}</span>${sep}`;
       }).join('');
     }
 
     if (nextMeta) {
-      nextMeta.textContent = `NEXT BAR • BAR ${barIndex + 2}`;
+      nextMeta.textContent = `NEXT BAR • BAR ${barIndex + 2}${nextTensionLabel}`;
     }
     if (nextSymbol) {
       const nextCountClass = `count-${Math.min(4, Math.max(1, nextMeasure.length))}`;
@@ -872,10 +900,16 @@ export class AppUI {
       nextSymbol.innerHTML = nextMeasure.map((sym, i) => {
         const silent = this.isSilentChordSymbol(sym);
         const label = silent ? 'Ø' : sym;
+        const origSym = rawNextMeasure[i] || sym;
+        const wasSubbed = !silent && sym !== origSym;
         const immediateClass = (isLastChordOfCurrentBar && i === 0) ? ' is-next-immediate' : '';
         const silentClass = silent ? ' is-silent-chord' : '';
+        const subClass = wasSubbed ? ' is-tension-sub' : '';
+        const tip = silent
+          ? 'Silent / N.C.'
+          : (wasSubbed ? `Tension ${nextTension > 0 ? `+${nextTension}` : nextTension} Substitution: ${sym} (written: ${origSym})` : label);
         const sep = i < nextMeasure.length - 1 ? '<span class="chord-bar-sep">·</span>' : '';
-        return `<span class="chord-bar-item${immediateClass}${silentClass}" title="${silent ? 'Silent / N.C.' : label}">${label}</span>${sep}`;
+        return `<span class="chord-bar-item${immediateClass}${silentClass}${subClass}" title="${tip}">${label}</span>${sep}`;
       }).join('');
     }
   }
@@ -1001,9 +1035,12 @@ export class AppUI {
             <div class="slot-pattern-name">${pat.name}</div>
           </div>
 
-          <div class="slot-tension-stepper" title="Macro Tension Offset (-5 to +5)">
+          <div class="slot-tension-stepper" title="Macro Tension Offset (-5 to +5) • Click −/+, Drag Up/Down, Scroll Wheel, or Double-click to reset to 0">
             <button class="slot-tension-btn tension-dec" data-track="${trackKey}" data-slot="${slotIdx}">−</button>
-            <span class="slot-tension-val ${slotObj.tension !== 0 ? 'non-zero' : ''}">${tensionSign}</span>
+            <span class="slot-tension-val ${slotObj.tension !== 0 ? 'non-zero' : ''} ${slotObj.tension > 0 ? 'is-pos-tension' : slotObj.tension < 0 ? 'is-neg-tension' : ''}"
+                  data-track="${trackKey}"
+                  data-slot="${slotIdx}"
+                  title="Drag Up/Down or Scroll Wheel to adjust Tension (-5 to +5) • Double-click to reset to 0">${tensionSign}</span>
             <button class="slot-tension-btn tension-inc" data-track="${trackKey}" data-slot="${slotIdx}">+</button>
           </div>
         `;
@@ -1158,13 +1195,30 @@ export class AppUI {
       });
     });
 
+    const applySlotTension = (trackKey, slotIdx, newTension, badgeEl = null) => {
+      const slot = this.tracks[trackKey] && this.tracks[trackKey].slots[slotIdx];
+      if (!slot) return;
+      const clamped = Math.max(-5, Math.min(5, Math.round(newTension)));
+      if (slot.tension === clamped) return;
+      slot.tension = clamped;
+      if (badgeEl) {
+        badgeEl.textContent = clamped > 0 ? `+${clamped}` : `${clamped}`;
+        badgeEl.classList.toggle('non-zero', clamped !== 0);
+        badgeEl.classList.toggle('is-pos-tension', clamped > 0);
+        badgeEl.classList.toggle('is-neg-tension', clamped < 0);
+      } else {
+        this.renderStageTracks();
+      }
+      this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+      this.saveWorkspaceToLocalStorage();
+    };
+
     container.querySelectorAll('.tension-dec').forEach(btn => {
       btn.addEventListener('click', () => {
         const trackKey = btn.getAttribute('data-track');
         const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
         const slot = this.tracks[trackKey].slots[slotIdx];
-        slot.tension = Math.max(-5, slot.tension - 1);
-        this.renderStageTracks();
+        if (slot) applySlotTension(trackKey, slotIdx, (slot.tension || 0) - 1);
       });
     });
 
@@ -1173,8 +1227,59 @@ export class AppUI {
         const trackKey = btn.getAttribute('data-track');
         const slotIdx = parseInt(btn.getAttribute('data-slot'), 10);
         const slot = this.tracks[trackKey].slots[slotIdx];
-        slot.tension = Math.min(5, slot.tension + 1);
-        this.renderStageTracks();
+        if (slot) applySlotTension(trackKey, slotIdx, (slot.tension || 0) + 1);
+      });
+    });
+
+    container.querySelectorAll('.slot-tension-val').forEach(badge => {
+      const trackKey = badge.getAttribute('data-track');
+      const slotIdx = parseInt(badge.getAttribute('data-slot'), 10);
+      let dragStartY = null;
+      let startTension = 0;
+
+      badge.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const slot = this.tracks[trackKey]?.slots[slotIdx];
+        if (!slot) return;
+        dragStartY = e.clientY;
+        startTension = slot.tension || 0;
+        badge.classList.add('is-dragging');
+        if (badge.setPointerCapture) {
+          try { badge.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+      });
+
+      badge.addEventListener('pointermove', (e) => {
+        if (dragStartY === null) return;
+        const deltaY = dragStartY - e.clientY; // Drag UP = higher tension
+        const steps = Math.round(deltaY / 10);
+        applySlotTension(trackKey, slotIdx, startTension + steps, badge);
+      });
+
+      const endTensionDrag = (e) => {
+        if (dragStartY === null) return;
+        dragStartY = null;
+        badge.classList.remove('is-dragging');
+        if (badge.releasePointerCapture && e && e.pointerId !== undefined) {
+          try { badge.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+      };
+
+      badge.addEventListener('pointerup', endTensionDrag);
+      badge.addEventListener('pointercancel', endTensionDrag);
+
+      badge.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const slot = this.tracks[trackKey]?.slots[slotIdx];
+        if (!slot) return;
+        const dir = e.deltaY < 0 ? 1 : -1;
+        applySlotTension(trackKey, slotIdx, (slot.tension || 0) + dir, badge);
+      }, { passive: false });
+
+      badge.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        applySlotTension(trackKey, slotIdx, 0, badge);
       });
     });
 

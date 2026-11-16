@@ -1,8 +1,9 @@
     
     
-    ADDITIONAL FEATURES ( to be added LATER so not to do now !)
-    
-    
-        - add rythm / bassline / chord sequence RANDOM GENERATOR (inside the pattern editor) 
-        - add all the subtile chord substitution logic (predictive algo) , TENSION driven patterns 
-        - ADD AUDIO EXPORT ? mp3 ? 
+    ADDITIONAL FEATURES 
+
+        - add all the subtile chord substitution logic (predictive algo) , TENSION driven patterns , maybe with a simple "extrapolate chords" on the looper
+        - add the "usb controller pedal" feature to launch the sequencer 
+        - add sync with a daw if present 
+
+        

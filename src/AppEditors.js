@@ -6,6 +6,7 @@ import {
   getDefaultBeatSeparator
 } from './defaults.js';
 import { chordDictionary } from './theory/ChordDictionary.js';
+import { PatternGenerator } from './engine/PatternGenerator.js';
 
 const STRICT_PITCHES = [
   'C1', 'C#1', 'D1', 'Eb1', 'E1', 'F1', 'F#1', 'G1', 'Ab1', 'A1', 'Bb1', 'B1',
@@ -225,6 +226,8 @@ export const AppEditorsMixin = {
       pat.bars = parseInt(document.getElementById('bass-ed-bars').textContent, 10) || 1;
       pat.resolution = document.getElementById('bass-ed-res').value;
       pat.beatSep = Math.max(1, Math.min(9, parseInt(document.getElementById('bass-ed-beatsep').value, 10) || 4));
+      const bassOctEl = document.getElementById('bass-ed-octave');
+      pat.octave = bassOctEl ? Math.max(-4, Math.min(4, parseInt(bassOctEl.value, 10) || 0)) : (pat.octave || 0);
       const bassHumEl = document.getElementById('bass-ed-humanize');
       pat.humanize = bassHumEl ? Math.max(0, Math.min(100, parseInt(bassHumEl.value, 10) || 0)) : (pat.humanize || 0);
       const total = this.getTotalSteps(pat);
@@ -382,6 +385,39 @@ export const AppEditorsMixin = {
     };
     if (drumHumSlider) drumHumSlider.addEventListener('input', (e) => syncDrumHum(e.target.value));
     if (drumHumNum) drumHumNum.addEventListener('input', (e) => syncDrumHum(e.target.value));
+
+    // Algorithmic Drum Pattern Generator ("Get Inspired")
+    const drumGenRandSlider = document.getElementById('drum-ed-gen-rand-slider');
+    const drumGenRandNum = document.getElementById('drum-ed-gen-rand');
+    const drumGenStyleSel = document.getElementById('drum-ed-gen-style');
+    const drumGenBtn = document.getElementById('btn-drum-generate');
+
+    const syncDrumGenRand = (val) => {
+      const clamped = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      if (drumGenRandSlider) drumGenRandSlider.value = String(clamped);
+      if (drumGenRandNum) drumGenRandNum.value = String(clamped);
+    };
+    if (drumGenRandSlider) drumGenRandSlider.addEventListener('input', (e) => syncDrumGenRand(e.target.value));
+    if (drumGenRandNum) drumGenRandNum.addEventListener('input', (e) => syncDrumGenRand(e.target.value));
+
+    if (drumGenBtn) {
+      drumGenBtn.addEventListener('click', () => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat || pat.type !== 'drums') return;
+        const style = (drumGenStyleSel && drumGenStyleSel.value) || 'funk';
+        const randomness = drumGenRandNum ? parseInt(drumGenRandNum.value, 10) || 0 : 35;
+        const mutedCount = Array.isArray(pat.rowMutes) ? pat.rowMutes.filter(Boolean).length : 0;
+
+        PatternGenerator.generateDrumPattern(pat, { style, randomness });
+        this.renderDrumMatrix(pat);
+        this.saveWorkspaceToLocalStorage();
+        this.renderPatternLibrary();
+        this.renderPalette();
+
+        const lockNote = mutedCount > 0 ? ` (${mutedCount} muted row${mutedCount > 1 ? 's' : ''} locked)` : '';
+        this.log(`[GENERATOR 🎲] Drum ${pat.id} (${pat.timeSig} @ ${pat.resolution}): Generated "${style.toUpperCase()}" @ ${randomness}% randomness${lockNote}`);
+      });
+    }
   },
 
   populateDrumEditor(pat) {
@@ -652,6 +688,25 @@ export const AppEditorsMixin = {
       this.log(`[SF2] Bass Preset -> ${optText}`);
     });
 
+    const bassOctaveSelect = document.getElementById('bass-ed-octave');
+    if (bassOctaveSelect) {
+      bassOctaveSelect.addEventListener('change', async (e) => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat) return;
+        pat.octave = Math.max(-4, Math.min(4, parseInt(e.target.value, 10) || 0));
+        this.log(`[BASS EDITOR] Bass Octave -> ${pat.octave > 0 ? `+${pat.octave}` : pat.octave}`);
+        if (!this.engine.isPlaying) {
+          await this.ensureSystemInitialized();
+          const firstStep = (pat.bassSteps && pat.bassSteps.find(s => !s.rest)) || { pitch: 'A1', degree: 'R', accent: false };
+          const basePitch = pat.mode === 'strict'
+            ? (PITCH_TO_MIDI[firstStep.pitch] ?? 33)
+            : (33 + (DEGREE_TO_OFFSET[firstStep.degree] ?? 0));
+          const midiNote = Math.max(12, Math.min(108, basePitch + (pat.octave || 0) * 12));
+          this.midiBridge.sendNoteOn('bass', midiNote, firstStep.accent ? 120 : 95, this.engine.audioCtx.currentTime, 0.25);
+        }
+      });
+    }
+
     rehearsalMuteBtn.addEventListener('click', () => {
       this.tracks.bass.muted = !this.tracks.bass.muted;
       rehearsalMuteBtn.classList.toggle('active', this.tracks.bass.muted);
@@ -675,6 +730,37 @@ export const AppEditorsMixin = {
     };
     if (bassHumSlider) bassHumSlider.addEventListener('input', (e) => syncBassHum(e.target.value));
     if (bassHumNum) bassHumNum.addEventListener('input', (e) => syncBassHum(e.target.value));
+
+    // Algorithmic Bassline Pattern Generator ("Get Inspired")
+    const bassGenRandSlider = document.getElementById('bass-ed-gen-rand-slider');
+    const bassGenRandNum = document.getElementById('bass-ed-gen-rand');
+    const bassGenStyleSel = document.getElementById('bass-ed-gen-style');
+    const bassGenBtn = document.getElementById('btn-bass-generate');
+
+    const syncBassGenRand = (val) => {
+      const clamped = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      if (bassGenRandSlider) bassGenRandSlider.value = String(clamped);
+      if (bassGenRandNum) bassGenRandNum.value = String(clamped);
+    };
+    if (bassGenRandSlider) bassGenRandSlider.addEventListener('input', (e) => syncBassGenRand(e.target.value));
+    if (bassGenRandNum) bassGenRandNum.addEventListener('input', (e) => syncBassGenRand(e.target.value));
+
+    if (bassGenBtn) {
+      bassGenBtn.addEventListener('click', () => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat || pat.type !== 'bass') return;
+        const style = (bassGenStyleSel && bassGenStyleSel.value) || 'walking';
+        const randomness = bassGenRandNum ? parseInt(bassGenRandNum.value, 10) || 0 : 35;
+
+        PatternGenerator.generateBassPattern(pat, { style, randomness });
+        this.renderBassRibbon(pat);
+        this.saveWorkspaceToLocalStorage();
+        this.renderPatternLibrary();
+        this.renderPalette();
+
+        this.log(`[GENERATOR 🎲] Bass ${pat.id} (${pat.timeSig} @ ${pat.resolution}): Generated "${style.toUpperCase()}" @ ${randomness}% randomness`);
+      });
+    }
   },
 
   populateBassEditor(pat) {
@@ -705,6 +791,8 @@ export const AppEditorsMixin = {
     if (beatSepEl) beatSepEl.value = String(beatSep);
 
     document.getElementById('bass-ed-preset').value = pat.preset || 33;
+    const bassOctEl = document.getElementById('bass-ed-octave');
+    if (bassOctEl) bassOctEl.value = String(pat.octave || 0);
 
     const isStrict = pat.mode === 'strict';
     document.getElementById('bass-mode-strict').classList.toggle('active', isStrict);
@@ -784,9 +872,10 @@ export const AppEditorsMixin = {
       };
       const auditionBassStep = async () => {
         await this.ensureSystemInitialized();
-        const midiNote = pat.mode === 'strict'
+        const basePitch = pat.mode === 'strict'
           ? (PITCH_TO_MIDI[step.pitch] ?? 33)
           : (33 + (DEGREE_TO_OFFSET[step.degree] ?? 0));
+        const midiNote = Math.max(12, Math.min(108, basePitch + (pat.octave || 0) * 12));
         this.midiBridge.sendNoteOn('bass', midiNote, step.accent ? 120 : 95, this.engine.audioCtx.currentTime, 0.22);
       };
       const applyStepIndex = (newIdx) => {
@@ -1039,6 +1128,46 @@ export const AppEditorsMixin = {
     };
     if (chordHumSlider) chordHumSlider.addEventListener('input', (e) => syncChordHum(e.target.value));
     if (chordHumNum) chordHumNum.addEventListener('input', (e) => syncChordHum(e.target.value));
+
+    // Algorithmic Chord Progression Generator ("Get Inspired")
+    const chordGenRandSlider = document.getElementById('chord-ed-gen-rand-slider');
+    const chordGenRandNum = document.getElementById('chord-ed-gen-rand');
+    const chordGenStyleSel = document.getElementById('chord-ed-gen-style');
+    const chordGenKeySel = document.getElementById('chord-ed-gen-key');
+    const chordGenBtn = document.getElementById('btn-chord-generate');
+
+    const syncChordGenRand = (val) => {
+      const clamped = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      if (chordGenRandSlider) chordGenRandSlider.value = String(clamped);
+      if (chordGenRandNum) chordGenRandNum.value = String(clamped);
+    };
+    if (chordGenRandSlider) chordGenRandSlider.addEventListener('input', (e) => syncChordGenRand(e.target.value));
+    if (chordGenRandNum) chordGenRandNum.addEventListener('input', (e) => syncChordGenRand(e.target.value));
+
+    if (chordGenBtn) {
+      chordGenBtn.addEventListener('click', async () => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat || pat.type !== 'chords') return;
+        const style = (chordGenStyleSel && chordGenStyleSel.value) || 'jazz';
+        const key = (chordGenKeySel && chordGenKeySel.value) || 'auto';
+        const randomness = chordGenRandNum ? parseInt(chordGenRandNum.value, 10) || 0 : 35;
+
+        PatternGenerator.generateChordPattern(pat, { style, randomness, key });
+        pat.resolution = this.getChordPatternResolutionSummary(pat);
+        this.renderChordMeasuresGrid(pat);
+        this.updateChordDisplay(this.activeBarIndex, 0);
+        this.saveWorkspaceToLocalStorage();
+        this.renderPatternLibrary();
+        this.renderPalette();
+
+        const progressionPreview = pat.measures.map((m) => m.join(' · ')).join(' | ');
+        this.log(`[GENERATOR 🎲] Chords ${pat.id} (${style.toUpperCase()}, Key: ${key.toUpperCase()}, ${randomness}% Rand): ${progressionPreview}`);
+
+        if (!this.engine.isPlaying) {
+          await auditionChordEditorChange(pat);
+        }
+      });
+    }
   },
 
   populateChordEditor(pat) {
@@ -1328,9 +1457,10 @@ export const AppEditorsMixin = {
         this.highlightEditorStep('bass', sIdx);
         const stObj = pat.bassSteps[sIdx];
         if (stObj && !stObj.rest) {
-          const pitch = pat.mode === 'strict'
+          const basePitch = pat.mode === 'strict'
             ? (PITCH_TO_MIDI[stObj.pitch] || 33)
             : (33 + (DEGREE_TO_OFFSET[stObj.degree] || 0));
+          const pitch = Math.max(12, Math.min(108, basePitch + (pat.octave || 0) * 12));
           this.midiBridge.sendNoteOn('bass', pitch, stObj.accent ? 120 : 95, now, 0.2, pat.humanize || 0);
         }
       } else if (type === 'chords' && pat.measures && pat.measures.length > 0) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'autoband-core-v19';
+const CACHE_NAME = 'autoband-core-v21';
 
 const CORE_ASSETS = [
   './',
@@ -12,6 +12,8 @@ const CORE_ASSETS = [
   './src/ui/ChordDictionaryModal.js',
   './src/vendor/lame.min.js',
   './src/engine/AudioExporter.js',
+  './src/engine/PatternGenerator.js',
+  './src/engine/TensionEngine.js',
   './src/TimingEngine.js',
   './src/MidiBridge.js',
   './src/SoundFontManager.js',

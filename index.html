@@ -317,6 +317,26 @@
             </div>
           </div>
 
+          <div class="ctrl-field gen-inspire-cluster">
+            <span class="card-section-label" style="color: var(--color-drums);">Get Inspired (Muted = Locked)</span>
+            <div class="gen-inspire-row">
+              <select id="drum-ed-gen-style" title="Select Drum Generative Style">
+                <option value="funk" selected>Funk / Groove</option>
+                <option value="jazz">Jazz / Swing</option>
+                <option value="rock">Rock / Straight</option>
+                <option value="electronic">Electronic / 808</option>
+                <option value="latin">Latin / Odd-Pocket</option>
+              </select>
+              <div class="humanize-ctrl-box" title="Randomness % (0-30% Strict Pocket, 40-70% Syncopated &amp; Ghost Notes, 80-100% Polyrhythmic)">
+                <span class="gen-rand-label">RAND</span>
+                <input type="range" id="drum-ed-gen-rand-slider" min="0" max="100" step="1" value="35" class="humanize-slider">
+                <input type="number" id="drum-ed-gen-rand" min="0" max="100" step="1" value="35" class="humanize-num-input">
+                <span class="humanize-pct-unit">%</span>
+              </div>
+              <button id="btn-drum-generate" class="btn btn-inspire" title="Generate Drum Pattern for unmuted rows (Muted rows are protected)">GENERATE 🎲</button>
+            </div>
+          </div>
+
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
             <button id="btn-drum-export" class="btn btn-gold" title="Bounce this Drum Pattern stem to .WAV or .MP3">EXPORT AUDIO 💾</button>
             <button id="btn-drum-solo" class="btn btn-green">▶ PLAY SOLO</button>
@@ -436,11 +456,45 @@
           </div>
 
           <div class="ctrl-field">
+            <span class="card-section-label">Octave (-4 to +4)</span>
+            <select id="bass-ed-octave" title="Shift bass pattern octave (-4 to +4 octaves)">
+              <option value="-4">-4 Oct</option>
+              <option value="-3">-3 Oct</option>
+              <option value="-2">-2 Oct</option>
+              <option value="-1">-1 Oct</option>
+              <option value="0" selected>0 (Std Bass)</option>
+              <option value="1">+1 Oct</option>
+              <option value="2">+2 Oct</option>
+              <option value="3">+3 Oct</option>
+              <option value="4">+4 Oct</option>
+            </select>
+          </div>
+
+          <div class="ctrl-field">
             <span class="card-section-label">HUMAN %</span>
             <div class="humanize-ctrl-box" title="Humanize Micro-Timing (±12ms) &amp; Velocity Jitter (±10 MIDI units)">
               <input type="range" id="bass-ed-humanize-slider" min="0" max="100" step="1" value="0" class="humanize-slider">
               <input type="number" id="bass-ed-humanize" min="0" max="100" step="1" value="0" class="humanize-num-input">
               <span class="humanize-pct-unit">%</span>
+            </div>
+          </div>
+
+          <div class="ctrl-field gen-inspire-cluster">
+            <span class="card-section-label" style="color: var(--color-bass);">Get Inspired (Bass Generator)</span>
+            <div class="gen-inspire-row">
+              <select id="bass-ed-gen-style" title="Select Bassline Generative Style">
+                <option value="walking" selected>Walking Bass</option>
+                <option value="slap">Slap / Funk</option>
+                <option value="synth">Synth / Arp</option>
+                <option value="rootfifth">Root-Fifth Pocket</option>
+              </select>
+              <div class="humanize-ctrl-box" title="Randomness % (0-30% Consonance, 40-70% Passing Tones &amp; Slides, 80-100% Chromatic Approach)">
+                <span class="gen-rand-label">RAND</span>
+                <input type="range" id="bass-ed-gen-rand-slider" min="0" max="100" step="1" value="35" class="humanize-slider">
+                <input type="number" id="bass-ed-gen-rand" min="0" max="100" step="1" value="35" class="humanize-num-input">
+                <span class="humanize-pct-unit">%</span>
+              </div>
+              <button id="btn-bass-generate" class="btn btn-inspire" title="Generate Bassline Pattern conforming to active Time Sig &amp; Resolution">GENERATE 🎲</button>
             </div>
           </div>
 
@@ -554,6 +608,40 @@
               <input type="range" id="chord-ed-humanize-slider" min="0" max="100" step="1" value="0" class="humanize-slider">
               <input type="number" id="chord-ed-humanize" min="0" max="100" step="1" value="0" class="humanize-num-input">
               <span class="humanize-pct-unit">%</span>
+            </div>
+          </div>
+
+          <div class="ctrl-field gen-inspire-cluster">
+            <span class="card-section-label" style="color: var(--color-chords);">Get Inspired (Keeps Chords/Bar Format)</span>
+            <div class="gen-inspire-row">
+              <select id="chord-ed-gen-style" title="Select Harmonic Progression Style">
+                <option value="jazz" selected>Jazz ii-V-I &amp; Turnarounds</option>
+                <option value="pop">Pop / Neo-Soul Changes</option>
+                <option value="modal">Modal Vamp (Dorian/Lydian)</option>
+                <option value="blues">Blues / Gospel Changes</option>
+              </select>
+              <select id="chord-ed-gen-key" title="Select Musical Key Center (or Auto / Any Key)">
+                <option value="auto" selected>Auto / Any Key</option>
+                <option value="C">Key of C</option>
+                <option value="Db">Key of Db</option>
+                <option value="D">Key of D</option>
+                <option value="Eb">Key of Eb</option>
+                <option value="E">Key of E</option>
+                <option value="F">Key of F</option>
+                <option value="F#">Key of F#</option>
+                <option value="G">Key of G</option>
+                <option value="Ab">Key of Ab</option>
+                <option value="A">Key of A</option>
+                <option value="Bb">Key of Bb</option>
+                <option value="B">Key of B</option>
+              </select>
+              <div class="humanize-ctrl-box" title="Randomness % (0-30% Diatonic, 40-70% Extensions &amp; Borrowed Chords, 80-100% Tritone Subs &amp; Altered)">
+                <span class="gen-rand-label">RAND</span>
+                <input type="range" id="chord-ed-gen-rand-slider" min="0" max="100" step="1" value="35" class="humanize-slider">
+                <input type="number" id="chord-ed-gen-rand" min="0" max="100" step="1" value="35" class="humanize-num-input">
+                <span class="humanize-pct-unit">%</span>
+              </div>
+              <button id="btn-chord-generate" class="btn btn-inspire" title="Generate Chord Progression preserving each bar's current slot format">GENERATE 🎲</button>
             </div>
           </div>
 
@@ -685,6 +773,54 @@
                 <input type="number" id="hum-cfg-vel-num" min="4" max="80" step="1" value="30" class="humanize-num-input">
                 <span class="humanize-pct-unit">vel</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Predictive Tension Engine — Global Sensitivity & Rules -->
+        <div class="hw-card" style="grid-column: 1 / -1;">
+          <div class="settings-card-header">
+            <div>
+              <h3 class="settings-card-title" style="color: #c084fc;">Predictive Tension Engine — Global Sensitivity &amp; Rules</h3>
+              <span style="font-size: 0.78rem; color: var(--color-text-dim);">Fine-tune how Main Stage Loop Slot Tension (<code>-5</code> to <code>+5</code>) morphs Drum ghost notes &amp; turnaround fills, Bass chromatic approaches &amp; octave pops, and Chord modal/tritone substitutions in real time.</span>
+            </div>
+            <button id="btn-reset-tension-config" class="btn">Reset Tension Defaults</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0.75rem; margin-top: 0.25rem;">
+            <div class="routing-row" style="background: rgba(168, 85, 247, 0.05); padding: 0.65rem 0.8rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: #c084fc;">Tension Intensity Scale (25%–200%)</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">Master multiplier for density, ghost notes &amp; velocity scaling (<span id="lbl-tension-intensity">100%</span>)</div>
+              </div>
+              <div class="humanize-ctrl-box">
+                <input type="range" id="tension-cfg-scale-slider" min="25" max="200" step="5" value="100" class="humanize-slider">
+                <input type="number" id="tension-cfg-scale-num" min="25" max="200" step="5" value="100" class="humanize-num-input">
+                <span class="humanize-pct-unit">%</span>
+              </div>
+            </div>
+
+            <div class="routing-row" style="background: rgba(59, 130, 246, 0.05); padding: 0.65rem 0.8rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: var(--color-bass);">Predictive Lookahead Transitions</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">Auto-inject drum fills, bass chromatic approaches &amp; drop breaths on the final beat when the next slot changes tension</div>
+              </div>
+              <label class="checkbox-pill">
+                <input type="checkbox" id="tension-cfg-predictive" checked>
+                <span>Enabled</span>
+              </label>
+            </div>
+
+            <div class="routing-row" style="background: rgba(255, 170, 0, 0.05); padding: 0.65rem 0.8rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: var(--color-chords);">Chord Substitution Matrix Mode</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">Controls how Chords &amp; Teleprompter react at Tension ±1..±5</div>
+              </div>
+              <select id="tension-cfg-chord-mode" style="min-width: 175px;">
+                <option value="subs" selected>Extensions + Tritone Subs (≥+3)</option>
+                <option value="extensions">Extensions Only (Keep Root)</option>
+                <option value="comping">Rhythmic Comping &amp; Vel Only</option>
+              </select>
             </div>
           </div>
         </div>

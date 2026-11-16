@@ -10,6 +10,7 @@ import {
   TIME_SIG_SYNC_MODES,
   parseTempoRatio
 } from './defaults.js';
+import { TensionEngine, DEFAULT_TENSION_CONFIG } from './engine/TensionEngine.js';
 
 const PITCH_TO_MIDI = {
   C1: 24, 'C#1': 25, Db1: 25, D1: 26, 'D#1': 27, Eb1: 27, E1: 28, F1: 29, 'F#1': 30, Gb1: 30, G1: 31, 'G#1': 32, Ab1: 32, A1: 33, 'A#1': 34, Bb1: 34, B1: 35,
@@ -222,6 +223,64 @@ export const AppSettingsModalsMixin = {
       btnResetHumCfg.addEventListener('click', () => {
         applyHumanizeConfigUI(24, 30, true);
         this.log('[SETTINGS] Reset Humanize Engine Global Impact to defaults (24 ms / ±12 ms timing, 30 / ±15 velocity)');
+      });
+    }
+
+    // Predictive Tension Engine Global Sensitivity & Rules Controls
+    const tensionScaleSlider = document.getElementById('tension-cfg-scale-slider');
+    const tensionScaleNum = document.getElementById('tension-cfg-scale-num');
+    const tensionScaleLbl = document.getElementById('lbl-tension-intensity');
+    const tensionPredCheck = document.getElementById('tension-cfg-predictive');
+    const tensionChordModeSel = document.getElementById('tension-cfg-chord-mode');
+    const btnResetTensionCfg = document.getElementById('btn-reset-tension-config');
+
+    const applyTensionConfigUI = (cfgObj, save = true) => {
+      const clampedScale = Math.max(25, Math.min(200, parseInt(cfgObj.intensityScale, 10) || 100));
+      const pred = cfgObj.predictiveTransitions !== false;
+      const mode = ['subs', 'extensions', 'comping'].includes(cfgObj.chordSubMode) ? cfgObj.chordSubMode : 'subs';
+
+      this.tensionConfig = {
+        intensityScale: clampedScale,
+        predictiveTransitions: pred,
+        chordSubMode: mode
+      };
+
+      if (tensionScaleSlider) tensionScaleSlider.value = String(clampedScale);
+      if (tensionScaleNum) tensionScaleNum.value = String(clampedScale);
+      if (tensionScaleLbl) tensionScaleLbl.textContent = `${clampedScale}%`;
+      if (tensionPredCheck) tensionPredCheck.checked = pred;
+      if (tensionChordModeSel) tensionChordModeSel.value = mode;
+
+      this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+      if (save) this.saveWorkspaceToLocalStorage();
+    };
+
+    applyTensionConfigUI(this.tensionConfig || DEFAULT_TENSION_CONFIG, false);
+
+    if (tensionScaleSlider) {
+      tensionScaleSlider.addEventListener('input', (e) => {
+        applyTensionConfigUI({ ...this.tensionConfig, intensityScale: e.target.value }, true);
+      });
+    }
+    if (tensionScaleNum) {
+      tensionScaleNum.addEventListener('input', (e) => {
+        applyTensionConfigUI({ ...this.tensionConfig, intensityScale: e.target.value }, true);
+      });
+    }
+    if (tensionPredCheck) {
+      tensionPredCheck.addEventListener('change', (e) => {
+        applyTensionConfigUI({ ...this.tensionConfig, predictiveTransitions: e.target.checked }, true);
+      });
+    }
+    if (tensionChordModeSel) {
+      tensionChordModeSel.addEventListener('change', (e) => {
+        applyTensionConfigUI({ ...this.tensionConfig, chordSubMode: e.target.value }, true);
+      });
+    }
+    if (btnResetTensionCfg) {
+      btnResetTensionCfg.addEventListener('click', () => {
+        applyTensionConfigUI({ ...DEFAULT_TENSION_CONFIG }, true);
+        this.log('[SETTINGS] Reset Predictive Tension Engine to defaults (100% Intensity, Lookahead ON, Tritone Subs ≥ +3)');
       });
     }
   },
@@ -596,6 +655,7 @@ export const AppSettingsModalsMixin = {
         bpm: 120,
         bars: 1,
         resolution: '1/16',
+        octave: 0,
         humanize: 0,
         preset: DEFAULT_GM_PRESETS.bass.program,
         mode: 'follower',
@@ -907,15 +967,20 @@ export const AppSettingsModalsMixin = {
         const tStep = cc.nextStepTime;
         const cBarIdx = cc.barIndex;
         const cSlot = chordSlots[cBarIdx % chordSlots.length];
+        const nextCSlot = chordSlots[(cBarIdx + 1) % chordSlots.length];
         const cPat = this.getPatternById(cSlot?.patternId);
+        const nextCPat = this.getPatternById(nextCSlot?.patternId);
 
         if (!cPat || !cPat.measures || cPat.measures.length === 0) {
           cc.nextStepTime += secPerQuarter;
           break;
         }
 
+        const nowChordTension = cSlot?.tension || 0;
+        const nextChordTension = nextCSlot?.tension || 0;
         const barInPat = cBarIdx % cPat.measures.length;
-        const m = cPat.measures[barInPat] || ['Am7'];
+        const rawM = cPat.measures[barInPat] || ['Am7'];
+        const m = TensionEngine.transformBarMeasure(rawM, nowChordTension, cBarIdx, this.tensionConfig);
         const chordsInBar = Math.max(1, m.length);
         const chordSlotIdx = Math.min(chordsInBar - 1, cc.stepInBar);
 
@@ -926,6 +991,18 @@ export const AppSettingsModalsMixin = {
 
         const sym = m[chordSlotIdx] !== undefined ? m[chordSlotIdx] : 'Am7';
         this.activeChordSymbolLive = sym;
+
+        // Compute upcoming chord symbol for Bass Predictive Chromatic Approach
+        if (chordSlotIdx + 1 < chordsInBar) {
+          this.nextChordSymbolLive = m[chordSlotIdx + 1];
+        } else if (nextCPat && nextCPat.measures && nextCPat.measures.length > 0) {
+          const rawNextM = nextCPat.measures[(cBarIdx + 1) % nextCPat.measures.length] || ['Am7'];
+          const nextM = TensionEngine.transformBarMeasure(rawNextM, nextChordTension, cBarIdx + 1, this.tensionConfig);
+          this.nextChordSymbolLive = nextM[0] || 'Am7';
+        } else {
+          this.nextChordSymbolLive = m[0] || 'Am7';
+        }
+
         const isSilent = this.isSilentChordSymbol(sym);
 
         if (cc.stepInBar === 0) {
@@ -938,12 +1015,21 @@ export const AppSettingsModalsMixin = {
             cPat.voicing || 'Jazz Drop-2',
             cPat.octave || 0
           );
-          const chordDur = slotDurSec * 0.92;
+          const isLastSlotOfBar = chordSlotIdx === chordsInBar - 1;
+          const strikes = TensionEngine.getChordExecutionPlan(
+            slotDurSec,
+            nowChordTension,
+            nextChordTension,
+            isLastSlotOfBar,
+            this.tensionConfig
+          );
           const chordHum = (this.tracks.chords.humanize || 0) > 0
             ? this.tracks.chords.humanize
             : (cPat.humanize || 0);
-          midiNotes.forEach(note => {
-            this.midiBridge.sendNoteOn('chords', note, 85, tStep, chordDur, chordHum);
+          strikes.forEach((st) => {
+            midiNotes.forEach((note) => {
+              this.midiBridge.sendNoteOn('chords', note, st.velocity, tStep + st.offsetSec, st.durationSec, chordHum);
+            });
           });
         }
 
@@ -982,6 +1068,7 @@ export const AppSettingsModalsMixin = {
         const tStep = dc.nextStepTime;
         const dBarIdx = dc.barIndex;
         const dSlot = drumSlots[dBarIdx % drumSlots.length];
+        const nextDSlot = drumSlots[(dBarIdx + 1) % drumSlots.length];
         const dPat = this.getPatternById(dSlot?.patternId);
 
         if (!dPat || !dPat.drumGrid) {
@@ -996,7 +1083,8 @@ export const AppSettingsModalsMixin = {
 
         const barDurSec = this.getPatternBarDurationSec(dPat, masterTempo);
         const dStepDur = Math.max(0.02, barDurSec / stepsPerBar);
-        const anyRowSolo = dPat.rowSolos && dPat.rowSolos.some(Boolean);
+        const nowDrumTension = dSlot?.tension || 0;
+        const nextDrumTension = nextDSlot?.tension || 0;
 
         if (dc.stepInBar === 0) {
           scheduleTrackSlotHighlight('drums', dBarIdx, tStep);
@@ -1006,15 +1094,22 @@ export const AppSettingsModalsMixin = {
           const drumHum = (this.tracks.drums.humanize || 0) > 0
             ? this.tracks.drums.humanize
             : (dPat.humanize || 0);
-          this.drumSlots.forEach((inst, rowIdx) => {
-            if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
-            if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
-            const state = dPat.drumGrid[rowIdx] && dPat.drumGrid[rowIdx][stepIndex];
-            if (state > 0) {
-              const vel = this.getDrumStepVelocity(state);
-              const dur = state === 2 ? 0.18 : (state === 1 ? 0.15 : 0.12);
-              this.midiBridge.sendNoteOn('rhythm', inst.pitch, vel, tStep, dur, drumHum);
-            }
+
+          const hits = TensionEngine.evaluateDrumStep({
+            pat: dPat,
+            drumSlots: this.drumSlots,
+            stepIndex,
+            stepInBar: dc.stepInBar,
+            stepsPerBar,
+            barIndex: dBarIdx,
+            tension: nowDrumTension,
+            nextTension: nextDrumTension,
+            getStepVelocity: (st) => this.getDrumStepVelocity(st),
+            config: this.tensionConfig
+          });
+
+          hits.forEach((h) => {
+            this.midiBridge.sendNoteOn('rhythm', h.pitch, h.velocity, tStep, h.duration, drumHum);
           });
         }
 
@@ -1044,6 +1139,7 @@ export const AppSettingsModalsMixin = {
         const tStep = bc.nextStepTime;
         const bBarIdx = bc.barIndex;
         const bSlot = bassSlots[bBarIdx % bassSlots.length];
+        const nextBSlot = bassSlots[(bBarIdx + 1) % bassSlots.length];
         const bPat = this.getPatternById(bSlot?.patternId);
 
         if (!bPat || !bPat.bassSteps) {
@@ -1063,24 +1159,40 @@ export const AppSettingsModalsMixin = {
         const bStepDur = Math.max(0.02, barDurSec / stepsPerBar);
 
         const activeChordSym = this.activeChordSymbolLive !== undefined ? this.activeChordSymbolLive : 'Am7';
+        const nextChordSym = this.nextChordSymbolLive !== undefined ? this.nextChordSymbolLive : activeChordSym;
         const isActiveChordSilent = this.isSilentChordSymbol(activeChordSym);
         const isBassSilencedByChord = isActiveChordSilent && bPat.mode !== 'strict';
         const rootMidi = isActiveChordSilent ? 45 : (this.getChordRootMidi(activeChordSym) - 24);
+        const nextRootMidi = this.isSilentChordSymbol(nextChordSym) ? rootMidi : (this.getChordRootMidi(nextChordSym) - 24);
+        const nowBassTension = bSlot?.tension || 0;
+        const nextBassTension = nextBSlot?.tension || 0;
 
         if (bc.stepInBar === 0) {
           scheduleTrackSlotHighlight('bass', bBarIdx, tStep);
         }
 
-        if (isTrackAudible('bass') && !isBassSilencedByChord && stepObj && !stepObj.rest) {
-          const midiPitch = bPat.mode === 'strict'
-            ? (PITCH_TO_MIDI[stepObj.pitch] ?? 33)
-            : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] ?? 0));
-          const vel = stepObj.accent ? 120 : 92;
-          const dur = Math.max(0.06, bStepDur * (stepObj.gate / 100));
-          const bassHum = (this.tracks.bass.humanize || 0) > 0
-            ? this.tracks.bass.humanize
-            : (bPat.humanize || 0);
-          this.midiBridge.sendNoteOn('bass', midiPitch, vel, tStep, dur, bassHum);
+        if (isTrackAudible('bass') && !isBassSilencedByChord) {
+          const bassResult = TensionEngine.evaluateBassStep({
+            pat: bPat,
+            stepObj,
+            stepInBar: bc.stepInBar,
+            stepsPerBar,
+            stepDurSec: bStepDur,
+            tension: nowBassTension,
+            nextTension: nextBassTension,
+            rootMidi,
+            nextRootMidi,
+            pitchToMidi: PITCH_TO_MIDI,
+            degreeToOffset: DEGREE_TO_OFFSET,
+            config: this.tensionConfig
+          });
+
+          if (bassResult.play) {
+            const bassHum = (this.tracks.bass.humanize || 0) > 0
+              ? this.tracks.bass.humanize
+              : (bPat.humanize || 0);
+            this.midiBridge.sendNoteOn('bass', bassResult.midiPitch, bassResult.velocity, tStep, bassResult.durationSec, bassHum);
+          }
         }
 
         if (this.editingPatternId === bPat.id) {

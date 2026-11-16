@@ -6,6 +6,7 @@
  */
 
 import { InternalSF2Synth } from '../SoundFontManager.js';
+import { TensionEngine } from './TensionEngine.js';
 
 const PITCH_TO_MIDI = {
   C1: 24, 'C#1': 25, Db1: 25, D1: 26, 'D#1': 27, Eb1: 27, E1: 28, F1: 29, 'F#1': 30, Gb1: 30, G1: 31, 'G#1': 32, Ab1: 32, A1: 33, 'A#1': 34, Bb1: 34, B1: 35,
@@ -307,9 +308,10 @@ export class AudioExporter {
           const stepObj = pat.bassSteps[stepIndex];
           if (stepObj && !stepObj.rest) {
             const tStep = bar * barDurSec + s * stepDur;
-            const pitch = pat.mode === 'strict'
+            const basePitch = pat.mode === 'strict'
               ? (PITCH_TO_MIDI[stepObj.pitch] || 33)
               : (33 + (DEGREE_TO_OFFSET[stepObj.degree] || 0));
+            const pitch = Math.max(12, Math.min(108, basePitch + (pat.octave || 0) * 12));
             const baseVel = stepObj.accent ? 120 : 95;
             const dur = Math.max(0.06, stepDur * ((stepObj.gate || 50) / 100));
             const { time, velocity } = this._applyHumanize(tStep, baseVel, hum);
@@ -389,15 +391,20 @@ export class AudioExporter {
     // 3. Schedule Chords Timeline (and record active chord symbol timeline for Harmonic Follower Bass)
     const chordTimeline = [];
     const chordSlots = this.appUI.tracks.chords.slots;
+    const tensionCfg = this.appUI.tensionConfig;
     if (chordSlots.length > 0) {
       let cTime = 0;
       let cBarIdx = 0;
       while (cTime < activeArrangementEnd - 1e-4 && cBarIdx < 512) {
         const cSlot = chordSlots[cBarIdx % chordSlots.length];
+        const nextCSlot = chordSlots[(cBarIdx + 1) % chordSlots.length];
         const cPat = this.appUI.getPatternById(cSlot?.patternId);
         if (!cPat || !cPat.measures || cPat.measures.length === 0) break;
 
-        const m = cPat.measures[cBarIdx % cPat.measures.length] || ['Am7'];
+        const nowChordTension = cSlot?.tension || 0;
+        const nextChordTension = nextCSlot?.tension || 0;
+        const rawM = cPat.measures[cBarIdx % cPat.measures.length] || ['Am7'];
+        const m = TensionEngine.transformBarMeasure(rawM, nowChordTension, cBarIdx, tensionCfg);
         const chordsInBar = Math.max(1, m.length);
         const masterBoundary = masterBarBoundaries[Math.min(cBarIdx, masterBarBoundaries.length - 1)];
         const barDur = syncMode === 'bar-fit' && masterBoundary
@@ -425,9 +432,19 @@ export class AudioExporter {
               cPat.voicing || 'Jazz Drop-2',
               cPat.octave || 0
             );
-            midiNotes.forEach((note) => {
-              const { time, velocity } = this._applyHumanize(tStep, 85, chordHum);
-              this._scheduleOfflineNote(offlineSynth, offlineCtx, submix, 3, note, velocity, time, effectiveDur * 0.98);
+            const isLastSlotOfBar = s === chordsInBar - 1;
+            const strikes = TensionEngine.getChordExecutionPlan(
+              effectiveDur,
+              nowChordTension,
+              nextChordTension,
+              isLastSlotOfBar,
+              tensionCfg
+            );
+            strikes.forEach((st) => {
+              midiNotes.forEach((note) => {
+                const { time, velocity } = this._applyHumanize(tStep + st.offsetSec, st.velocity, chordHum);
+                this._scheduleOfflineNote(offlineSynth, offlineCtx, submix, 3, note, velocity, time, st.durationSec);
+              });
             });
           }
         }
@@ -449,6 +466,7 @@ export class AudioExporter {
       for (let dBarIdx = 0; dBarIdx < numMasterBars; dBarIdx++) {
         const boundary = masterBarBoundaries[dBarIdx];
         const dSlot = drumSlots[dBarIdx % drumSlots.length];
+        const nextDSlot = drumSlots[(dBarIdx + 1) % drumSlots.length];
         const dPat = this.appUI.getPatternById(dSlot?.patternId);
         if (!dPat || !dPat.drumGrid) continue;
 
@@ -456,7 +474,8 @@ export class AudioExporter {
         const totalSteps = Math.max(1, this.appUI.getTotalSteps(dPat));
         const barInPat = dBarIdx % Math.max(1, dPat.bars || 1);
         const stepDur = boundary.duration / stepsPerBar;
-        const anyRowSolo = dPat.rowSolos && dPat.rowSolos.some(Boolean);
+        const nowDrumTension = dSlot?.tension || 0;
+        const nextDrumTension = nextDSlot?.tension || 0;
         const drumHum = (this.appUI.tracks.drums.humanize || 0) > 0
           ? this.appUI.tracks.drums.humanize
           : (dPat.humanize || 0);
@@ -464,16 +483,22 @@ export class AudioExporter {
         for (let s = 0; s < stepsPerBar; s++) {
           const stepIndex = (barInPat * stepsPerBar + s) % totalSteps;
           const tStep = boundary.start + s * stepDur;
-          this.appUI.drumSlots.forEach((inst, rowIdx) => {
-            if (dPat.rowMutes && dPat.rowMutes[rowIdx]) return;
-            if (anyRowSolo && (!dPat.rowSolos || !dPat.rowSolos[rowIdx])) return;
-            const state = dPat.drumGrid[rowIdx] && dPat.drumGrid[rowIdx][stepIndex];
-            if (state > 0) {
-              const baseVel = this.appUI.getDrumStepVelocity(state);
-              const dur = state === 2 ? 0.22 : state === 1 ? 0.18 : 0.14;
-              const { time, velocity } = this._applyHumanize(tStep, baseVel, drumHum);
-              this._scheduleOfflineNote(offlineSynth, offlineCtx, submix, 10, inst.pitch, velocity, time, dur);
-            }
+          const hits = TensionEngine.evaluateDrumStep({
+            pat: dPat,
+            drumSlots: this.appUI.drumSlots,
+            stepIndex,
+            stepInBar: s,
+            stepsPerBar,
+            barIndex: dBarIdx,
+            tension: nowDrumTension,
+            nextTension: nextDrumTension,
+            getStepVelocity: (st) => this.appUI.getDrumStepVelocity(st),
+            config: tensionCfg
+          });
+
+          hits.forEach((h) => {
+            const { time, velocity } = this._applyHumanize(tStep, h.velocity, drumHum);
+            this._scheduleOfflineNote(offlineSynth, offlineCtx, submix, 10, h.pitch, velocity, time, h.duration);
           });
         }
       }
@@ -486,6 +511,7 @@ export class AudioExporter {
       let bBarIdx = 0;
       while (bTime < activeArrangementEnd - 1e-4 && bBarIdx < 512) {
         const bSlot = bassSlots[bBarIdx % bassSlots.length];
+        const nextBSlot = bassSlots[(bBarIdx + 1) % bassSlots.length];
         const bPat = this.appUI.getPatternById(bSlot?.patternId);
         if (!bPat || !bPat.bassSteps) break;
 
@@ -501,6 +527,8 @@ export class AudioExporter {
           ? masterBoundary.end
           : activeArrangementEnd;
 
+        const nowBassTension = bSlot?.tension || 0;
+        const nextBassTension = nextBSlot?.tension || 0;
         const bassHum = (this.appUI.tracks.bass.humanize || 0) > 0
           ? this.appUI.tracks.bass.humanize
           : (bPat.humanize || 0);
@@ -510,20 +538,34 @@ export class AudioExporter {
           if (tStep >= activeArrangementEnd - 1e-4 || tStep >= barCutoff - 1e-4) break;
           const stepIndex = (barInPat * stepsPerBar + s) % totalSteps;
           const stepObj = bPat.bassSteps[stepIndex];
-          if (!stepObj || stepObj.rest) continue;
 
           const activeChordSym = getChordAtTime(tStep);
+          const nextChordSym = getChordAtTime(tStep + stepDur);
           const isChordSilent = this.appUI.isSilentChordSymbol(activeChordSym);
           if (isChordSilent && bPat.mode !== 'strict') continue;
 
           const rootMidi = isChordSilent ? 45 : (this.appUI.getChordRootMidi(activeChordSym) - 24);
-          const midiPitch = bPat.mode === 'strict'
-            ? (PITCH_TO_MIDI[stepObj.pitch] ?? 33)
-            : (rootMidi + (DEGREE_TO_OFFSET[stepObj.degree] ?? 0));
-          const baseVel = stepObj.accent ? 120 : 92;
-          const dur = Math.max(0.06, stepDur * ((stepObj.gate || 50) / 100));
-          const { time, velocity } = this._applyHumanize(tStep, baseVel, bassHum);
-          this._scheduleOfflineNote(offlineSynth, offlineCtx, submix, 2, midiPitch, velocity, time, dur);
+          const nextRootMidi = this.appUI.isSilentChordSymbol(nextChordSym) ? rootMidi : (this.appUI.getChordRootMidi(nextChordSym) - 24);
+
+          const bassResult = TensionEngine.evaluateBassStep({
+            pat: bPat,
+            stepObj,
+            stepInBar: s,
+            stepsPerBar,
+            stepDurSec: stepDur,
+            tension: nowBassTension,
+            nextTension: nextBassTension,
+            rootMidi,
+            nextRootMidi,
+            pitchToMidi: PITCH_TO_MIDI,
+            degreeToOffset: DEGREE_TO_OFFSET,
+            config: tensionCfg
+          });
+
+          if (bassResult.play) {
+            const { time, velocity } = this._applyHumanize(tStep, bassResult.velocity, bassHum);
+            this._scheduleOfflineNote(offlineSynth, offlineCtx, submix, 2, bassResult.midiPitch, velocity, time, bassResult.durationSec);
+          }
         }
 
         bTime = syncMode === 'master-reset' && masterBoundary ? masterBoundary.end : (bTime + barDur);
