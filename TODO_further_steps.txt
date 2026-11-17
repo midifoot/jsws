@@ -2,8 +2,7 @@
     
     ADDITIONAL FEATURES 
 
-        - add all the subtile chord substitution logic (predictive algo) , TENSION driven patterns , maybe with a simple "extrapolate chords" on the looper
-        - add the "usb controller pedal" feature to launch the sequencer 
+        - add the "usb controller pedal" feature to launch the sequencer with a midi foot controller
         - add sync with a daw if present 
 
         
