@@ -4,6 +4,7 @@ import { chordDictionary } from './theory/ChordDictionary.js';
 import { ChordDictionaryModal } from './ui/ChordDictionaryModal.js';
 import { AudioExporter } from './engine/AudioExporter.js';
 import { TensionEngine, DEFAULT_TENSION_CONFIG } from './engine/TensionEngine.js';
+import { DEFAULT_VOYAGE_CONFIG } from './theory/ModalVoyager.js';
 /**
  * src/AppUI.js - AutoBand Front-End UI/UX Controller
  * Manages tab navigation, Main Stage loops/palette/snapshots, Unified Pattern Library,
@@ -66,6 +67,9 @@ export class AppUI {
 
     // Global Predictive Tension Engine Settings (configurable in System Settings)
     this.tensionConfig = { ...DEFAULT_TENSION_CONFIG };
+
+    // Global Modal Voyager & Modulation Settings (configurable on Main Stage & System Settings)
+    this.voyageConfig = { ...DEFAULT_VOYAGE_CONFIG };
 
     // Pattern Library State (Initialized from src/defaults.js)
     this.patterns = createDefaultPatterns();
@@ -268,6 +272,7 @@ export class AppUI {
       timeSigSyncMode: this.timeSigSyncMode || 'independent',
       humanizeConfig: { ...this.humanizeConfig },
       tensionConfig: { ...this.tensionConfig },
+      voyageConfig: { ...this.voyageConfig },
       drumVelocities: { ...this.drumVelocities },
       drumSlots: this.drumSlots.map(s => ({ ...s })),
       tracks: {
@@ -333,6 +338,19 @@ export class AppUI {
         chordSubMode: ['subs', 'extensions', 'comping'].includes(data.tensionConfig.chordSubMode)
           ? data.tensionConfig.chordSubMode
           : 'subs'
+      };
+    }
+
+    if (data.voyageConfig && typeof data.voyageConfig === 'object') {
+      this.voyageConfig = {
+        orbit: ['off', 'tension', 'near', 'medium', 'far'].includes(data.voyageConfig.orbit)
+          ? data.voyageConfig.orbit
+          : 'off',
+        method: ['hybrid', 'parallel', 'pivot', 'constant'].includes(data.voyageConfig.method)
+          ? data.voyageConfig.method
+          : 'hybrid',
+        returnHome: data.voyageConfig.returnHome !== false,
+        cycleVariation: data.voyageConfig.cycleVariation !== false
       };
     }
 
@@ -862,15 +880,35 @@ export class AppUI {
       }
     }
 
-    const nowMeasure = TensionEngine.transformBarMeasure(rawNowMeasure, nowTension, barIndex, this.tensionConfig);
-    const nextMeasure = TensionEngine.transformBarMeasure(rawNextMeasure, nextTension, barIndex + 1, this.tensionConfig);
+    const nowMetaRes = TensionEngine.transformBarMeasureWithMeta(
+      rawNowMeasure,
+      nowTension,
+      barIndex,
+      this.tensionConfig,
+      this.voyageConfig,
+      currentPat?.measures
+    );
+    const nextMetaRes = TensionEngine.transformBarMeasureWithMeta(
+      rawNextMeasure,
+      nextTension,
+      barIndex + 1,
+      this.tensionConfig,
+      this.voyageConfig,
+      nextPat?.measures
+    );
+
+    const nowMeasure = nowMetaRes.chords;
+    const nextMeasure = nextMetaRes.chords;
+    const nowAnnotations = nowMetaRes.annotations || [];
+    const nextAnnotations = nextMetaRes.annotations || [];
 
     const isLastChordOfCurrentBar = activeIdxInBar >= nowMeasure.length - 1;
     const nowTensionLabel = nowTension !== 0 ? ` • TENSION ${nowTension > 0 ? `+${nowTension}` : nowTension}` : '';
     const nextTensionLabel = nextTension !== 0 ? ` • TENSION ${nextTension > 0 ? `+${nextTension}` : nextTension}` : '';
+    const activeAnnotation = nowAnnotations[activeIdxInBar] ? ` • 🧭 ${nowAnnotations[activeIdxInBar]}` : '';
 
     if (nowMeta) {
-      nowMeta.textContent = `NOW • BAR ${barIndex + 1} • BEAT ${beatIndex + 1} / ${totalBeatsInBar}${nowTensionLabel}`;
+      nowMeta.textContent = `NOW • BAR ${barIndex + 1} • BEAT ${beatIndex + 1} / ${totalBeatsInBar}${nowTensionLabel}${activeAnnotation}`;
     }
     if (nowSymbol) {
       const countClass = `count-${Math.min(4, Math.max(1, nowMeasure.length))}`;
@@ -880,19 +918,21 @@ export class AppUI {
         const label = silent ? 'Ø' : sym;
         const origSym = rawNowMeasure[i] || sym;
         const wasSubbed = !silent && sym !== origSym;
+        const noteTag = nowAnnotations[i] || '';
         const activeClass = i === activeIdxInBar ? ' is-active' : '';
         const silentClass = silent ? ' is-silent-chord' : '';
         const subClass = wasSubbed ? ' is-tension-sub' : '';
         const tip = silent
           ? 'Silent / N.C.'
-          : (wasSubbed ? `Tension ${nowTension > 0 ? `+${nowTension}` : nowTension} Substitution: ${sym} (written: ${origSym})` : label);
+          : (wasSubbed || noteTag ? `${sym} (written: ${origSym})${noteTag ? ` • ${noteTag}` : ''}` : label);
         const sep = i < nowMeasure.length - 1 ? '<span class="chord-bar-sep">·</span>' : '';
         return `<span class="chord-bar-item${activeClass}${silentClass}${subClass}" title="${tip}">${label}</span>${sep}`;
       }).join('');
     }
 
     if (nextMeta) {
-      nextMeta.textContent = `NEXT BAR • BAR ${barIndex + 2}${nextTensionLabel}`;
+      const nextFirstNote = nextAnnotations[0] ? ` • 🧭 ${nextAnnotations[0]}` : '';
+      nextMeta.textContent = `NEXT BAR • BAR ${barIndex + 2}${nextTensionLabel}${nextFirstNote}`;
     }
     if (nextSymbol) {
       const nextCountClass = `count-${Math.min(4, Math.max(1, nextMeasure.length))}`;
@@ -902,12 +942,13 @@ export class AppUI {
         const label = silent ? 'Ø' : sym;
         const origSym = rawNextMeasure[i] || sym;
         const wasSubbed = !silent && sym !== origSym;
+        const noteTag = nextAnnotations[i] || '';
         const immediateClass = (isLastChordOfCurrentBar && i === 0) ? ' is-next-immediate' : '';
         const silentClass = silent ? ' is-silent-chord' : '';
         const subClass = wasSubbed ? ' is-tension-sub' : '';
         const tip = silent
           ? 'Silent / N.C.'
-          : (wasSubbed ? `Tension ${nextTension > 0 ? `+${nextTension}` : nextTension} Substitution: ${sym} (written: ${origSym})` : label);
+          : (wasSubbed || noteTag ? `${sym} (written: ${origSym})${noteTag ? ` • ${noteTag}` : ''}` : label);
         const sep = i < nextMeasure.length - 1 ? '<span class="chord-bar-sep">·</span>' : '';
         return `<span class="chord-bar-item${immediateClass}${silentClass}${subClass}" title="${tip}">${label}</span>${sep}`;
       }).join('');
@@ -958,6 +999,28 @@ export class AppUI {
       row.className = `loop-track-row track-${trackKey}`;
 
       const presetOptionsHtml = this.getPresetOptionsHtml(trackKey);
+      const vCfg = this.voyageConfig || DEFAULT_VOYAGE_CONFIG;
+      const voyageClusterHtml = trackKey === 'chords'
+        ? `
+          <div class="stage-voyage-wrap" title="9-Mode Harmonic Voyager &amp; Pivot Modulation (Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian, Harm/Mel Minor)">
+            <span class="stage-voyage-lbl">🧭 VOYAGE</span>
+            <select id="stage-voyage-orbit" class="stage-voyage-select" title="Select Harmonic Voyage Orbit / Freedom">
+              <option value="off" ${vCfg.orbit === 'off' ? 'selected' : ''}>Off (Written)</option>
+              <option value="tension" ${vCfg.orbit === 'tension' ? 'selected' : ''}>Tension-Linked</option>
+              <option value="near" ${vCfg.orbit === 'near' ? 'selected' : ''}>Near Orbit</option>
+              <option value="medium" ${vCfg.orbit === 'medium' ? 'selected' : ''}>Medium Orbit</option>
+              <option value="far" ${vCfg.orbit === 'far' ? 'selected' : ''}>Far / Locrian</option>
+            </select>
+            <select id="stage-voyage-method" class="stage-voyage-select" title="Choose how Parallel Modal Borrowing and Pivot Key Modulations are mixed">
+              <option value="hybrid" ${vCfg.method === 'hybrid' ? 'selected' : ''}>Hybrid Blend</option>
+              <option value="parallel" ${vCfg.method === 'parallel' ? 'selected' : ''}>Parallel Modal</option>
+              <option value="pivot" ${vCfg.method === 'pivot' ? 'selected' : ''}>Pivot Modulation</option>
+              <option value="constant" ${vCfg.method === 'constant' ? 'selected' : ''}>Constant Struct</option>
+            </select>
+            <button type="button" id="stage-voyage-home-btn" class="btn-ms voyage-home-btn ${vCfg.returnHome !== false ? 'active' : ''}" title="Return Home Gravity: Anchor Bar 1 to Home Key &amp; resolve on final bar">🏠</button>
+          </div>
+        `
+        : '';
 
       row.innerHTML = `
         <div class="track-header-bar">
@@ -984,6 +1047,8 @@ export class AppUI {
               <input type="range" class="track-humanize-slider" data-track="${trackKey}" min="0" max="100" value="${track.humanize || 0}">
               <span class="track-humanize-val" id="track-hum-val-${trackKey}">${track.humanize || 0}%</span>
             </div>
+
+            ${voyageClusterHtml}
 
             <div class="track-ms-cluster">
               <button class="btn-ms mute-btn ${track.muted ? 'active' : ''}" data-track="${trackKey}" title="Mute ${track.label}">M</button>
@@ -1137,6 +1202,42 @@ export class AppUI {
         this.saveWorkspaceToLocalStorage();
       });
     });
+
+    const stageVoyageOrbitSel = container.querySelector('#stage-voyage-orbit');
+    const stageVoyageMethodSel = container.querySelector('#stage-voyage-method');
+    const stageVoyageHomeBtn = container.querySelector('#stage-voyage-home-btn');
+
+    if (stageVoyageOrbitSel) {
+      stageVoyageOrbitSel.addEventListener('change', (e) => {
+        this.voyageConfig.orbit = e.target.value || 'off';
+        this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+        this.saveWorkspaceToLocalStorage();
+        this.log(`[MODAL VOYAGER 🧭] Stage Voyage Orbit -> ${this.voyageConfig.orbit.toUpperCase()}`);
+      });
+    }
+
+    if (stageVoyageMethodSel) {
+      stageVoyageMethodSel.addEventListener('change', (e) => {
+        this.voyageConfig.method = e.target.value || 'hybrid';
+        const sysMethodSel = document.getElementById('voyage-cfg-method');
+        if (sysMethodSel) sysMethodSel.value = this.voyageConfig.method;
+        this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+        this.saveWorkspaceToLocalStorage();
+        this.log(`[MODAL VOYAGER 🧭] Stage Voyage Method -> ${this.voyageConfig.method.toUpperCase()}`);
+      });
+    }
+
+    if (stageVoyageHomeBtn) {
+      stageVoyageHomeBtn.addEventListener('click', () => {
+        this.voyageConfig.returnHome = !this.voyageConfig.returnHome;
+        stageVoyageHomeBtn.classList.toggle('active', this.voyageConfig.returnHome);
+        const sysHomeCheck = document.getElementById('voyage-cfg-return-home');
+        if (sysHomeCheck) sysHomeCheck.checked = this.voyageConfig.returnHome;
+        this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+        this.saveWorkspaceToLocalStorage();
+        this.log(`[MODAL VOYAGER 🧭] Return Home Gravity -> ${this.voyageConfig.returnHome ? 'ON (Anchored)' : 'OFF (Free Drift)'}`);
+      });
+    }
 
     container.querySelectorAll('.mute-btn').forEach(btn => {
       btn.addEventListener('click', () => {

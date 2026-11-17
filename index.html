@@ -645,6 +645,28 @@
             </div>
           </div>
 
+          <div class="ctrl-field gen-inspire-cluster">
+            <span class="card-section-label" style="color: #38bdf8;">Modal Voyage &amp; Modulation (9-Mode Matrix)</span>
+            <div class="gen-inspire-row">
+              <select id="chord-ed-voyage-method" title="Choose how Modal Borrowing and Pivot Key Modulations are mixed">
+                <option value="hybrid" selected>Hybrid (Parallel + Pivot + Constant)</option>
+                <option value="parallel">Parallel Modal (Same Key)</option>
+                <option value="pivot">Pivot Modulation (New Key/Mode)</option>
+                <option value="constant">Constant Structure (Same Quality)</option>
+              </select>
+              <select id="chord-ed-voyage-orbit" title="Harmonic Orbit Distance (Near = Smooth, Medium = Phrygian/Minors, Far = Locrian &amp; Free)">
+                <option value="near">Near Orbit</option>
+                <option value="medium" selected>Medium Orbit</option>
+                <option value="far">Far / Locrian</option>
+              </select>
+              <label class="checkbox-pill" style="height: 30px;" title="Keep Bar 1 anchored in the Home Key and turn the final chord into a turnaround back home">
+                <input type="checkbox" id="chord-ed-voyage-home" checked>
+                <span>Return Home</span>
+              </label>
+              <button id="btn-chord-voyage" class="btn btn-voyage" title="Interpolate &amp; modulate current chords using the 9-Mode Harmonic Matrix">VOYAGE 🧭</button>
+            </div>
+          </div>
+
           <div class="ctrl-field" style="margin-left: auto; flex-direction: row; align-items: center; gap: 0.6rem;">
             <button class="btn btn-gold btn-open-chords-dict">CHORDS DICTIONARY</button>
             <button id="btn-chord-export" class="btn btn-gold" title="Bounce this Chord Progression stem to .WAV or .MP3">EXPORT AUDIO 💾</button>
@@ -821,6 +843,25 @@
                 <option value="extensions">Extensions Only (Keep Root)</option>
                 <option value="comping">Rhythmic Comping &amp; Vel Only</option>
               </select>
+            </div>
+
+            <div class="routing-row" style="background: rgba(56, 189, 248, 0.05); padding: 0.65rem 0.8rem; border-radius: 5px; border: 1px solid var(--border-panel);">
+              <div>
+                <strong style="color: #38bdf8;">Modal Voyager — Method &amp; Return Home Gravity</strong>
+                <div style="font-size: 0.72rem; color: var(--color-text-dim);">Controls how the 9-Mode Voyager mixes Parallel Modal Borrowing, Pivot Modulations &amp; Home-Key Resolution</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                <select id="voyage-cfg-method" style="min-width: 165px;">
+                  <option value="hybrid" selected>Hybrid (Parallel + Pivot + Const)</option>
+                  <option value="parallel">Parallel Modal (Same Key)</option>
+                  <option value="pivot">Pivot Modulation (New Key)</option>
+                  <option value="constant">Constant Structure (Same Qual)</option>
+                </select>
+                <label class="checkbox-pill" title="Anchor Bar 1 in the Home Key and resolve on the final bar">
+                  <input type="checkbox" id="voyage-cfg-return-home" checked>
+                  <span>Return Home</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>

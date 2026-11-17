@@ -2209,6 +2209,75 @@ input[type="range"] {
   text-underline-offset: 4px;
 }
 
+/* ============================================================================
+   12. 9-MODE HARMONIC VOYAGER & PIVOT MODULATION UI
+   ============================================================================ */
+.stage-voyage-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 5px;
+  padding: 0.15rem 0.45rem;
+}
+
+.stage-voyage-lbl {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #38bdf8;
+  white-space: nowrap;
+}
+
+.stage-voyage-select {
+  height: 24px !important;
+  padding: 0 0.35rem !important;
+  font-size: 0.72rem !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  color: #e0f2fe !important;
+}
+
+.voyage-home-btn {
+  padding: 0 0.35rem;
+  height: 24px;
+  font-size: 0.75rem;
+}
+
+.voyage-home-btn.active {
+  background: rgba(56, 189, 248, 0.25) !important;
+  border-color: #38bdf8 !important;
+  color: #fff !important;
+}
+
+.btn-voyage {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.24), rgba(16, 185, 129, 0.22));
+  border: 1px solid #38bdf8;
+  color: #e0f2fe;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  height: 30px;
+  padding: 0 0.7rem;
+  transition: all 0.15s ease;
+}
+
+.btn-voyage:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.42), rgba(16, 185, 129, 0.38));
+  border-color: #7dd3fc;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+  transform: translateY(-1px);
+}
+
+.voyage-slot-note {
+  margin-top: 0.18rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+
 
 
 

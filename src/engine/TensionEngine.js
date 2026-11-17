@@ -8,6 +8,7 @@
  */
 
 import { chordDictionary } from '../theory/ChordDictionary.js';
+import { ModalVoyager, DEFAULT_VOYAGE_CONFIG } from '../theory/ModalVoyager.js';
 
 export const DEFAULT_TENSION_CONFIG = {
   intensityScale: 100,          // 25% to 200% master sensitivity multiplier
@@ -157,32 +158,90 @@ export class TensionEngine {
   }
 
   /**
-   * Transforms an entire bar's chord array for a given slot tension.
+   * Transforms an entire bar's chord array using both ModalVoyager (if active) and TensionEngine,
+   * returning { chords: string[], annotations: string[] }.
    */
-  static transformBarMeasure(barChords = ['Am7'], rawTension = 0, barIdx = 0, config = DEFAULT_TENSION_CONFIG) {
-    if (!Array.isArray(barChords) || barChords.length === 0) return ['Am7'];
-    const effT = this._effectiveTension(rawTension, config);
-    if (Math.abs(effT) < 0.15) return [...barChords];
+  static transformBarMeasureWithMeta(
+    barChords = ['Am7'],
+    rawTension = 0,
+    barIdx = 0,
+    config = DEFAULT_TENSION_CONFIG,
+    voyageConfig = DEFAULT_VOYAGE_CONFIG,
+    allMeasures = null
+  ) {
+    if (!Array.isArray(barChords) || barChords.length === 0) {
+      return { chords: ['Am7'], annotations: [''] };
+    }
 
-    // At extreme low tension (-5), sustain the first chord across the whole bar for spaciousness
-    if (effT <= -4.4 && barChords.length > 1) {
-      const firstSimp = this.transformChordSymbol(barChords[0], rawTension, {
+    // Step 1: Apply Modal Voyager (Parallel Modal Interchange / Pivot Modulation / Constant Structure) if active
+    const totalBars = Array.isArray(allMeasures) && allMeasures.length > 0 ? allMeasures.length : 4;
+    const loopCycle = Math.floor(barIdx / Math.max(1, totalBars));
+    const voyageRes = ModalVoyager.transformBarWithVoyage({
+      barChords,
+      allMeasures,
+      barIdx,
+      slotTension: rawTension,
+      voyageConfig,
+      cycleSeed: loopCycle
+    });
+
+    const baseChords = voyageRes.chords;
+    const annotations = voyageRes.annotations.slice();
+
+    // Step 2: Apply Tension Engine harmonic extensions / tritone substitutions
+    const effT = this._effectiveTension(rawTension, config);
+    if (Math.abs(effT) < 0.15) {
+      return { chords: baseChords, annotations };
+    }
+
+    if (effT <= -4.4 && baseChords.length > 1) {
+      const firstSimp = this.transformChordSymbol(baseChords[0], rawTension, {
         barIdx,
         slotIdx: 0,
         slotsInBar: 1,
         config
       });
-      return barChords.map(() => firstSimp);
+      return {
+        chords: baseChords.map(() => firstSimp),
+        annotations: baseChords.map((_, i) => annotations[i] || 'Tension -5 (Triad Sustain)')
+      };
     }
 
-    return barChords.map((sym, sIdx) =>
-      this.transformChordSymbol(sym, rawTension, {
+    const finalChords = baseChords.map((sym, sIdx) => {
+      const morphed = this.transformChordSymbol(sym, rawTension, {
         barIdx,
         slotIdx: sIdx,
-        slotsInBar: barChords.length,
+        slotsInBar: baseChords.length,
         config
-      })
-    );
+      });
+      if (morphed !== sym && !annotations[sIdx]) {
+        annotations[sIdx] = `Tension ${rawTension > 0 ? `+${rawTension}` : rawTension}`;
+      }
+      return morphed;
+    });
+
+    return { chords: finalChords, annotations };
+  }
+
+  /**
+   * Transforms an entire bar's chord array for a given slot tension (and optional voyageConfig).
+   */
+  static transformBarMeasure(
+    barChords = ['Am7'],
+    rawTension = 0,
+    barIdx = 0,
+    config = DEFAULT_TENSION_CONFIG,
+    voyageConfig = DEFAULT_VOYAGE_CONFIG,
+    allMeasures = null
+  ) {
+    return this.transformBarMeasureWithMeta(
+      barChords,
+      rawTension,
+      barIdx,
+      config,
+      voyageConfig,
+      allMeasures
+    ).chords;
   }
 
   /**

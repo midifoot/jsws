@@ -7,6 +7,7 @@ import {
 } from './defaults.js';
 import { chordDictionary } from './theory/ChordDictionary.js';
 import { PatternGenerator } from './engine/PatternGenerator.js';
+import { ModalVoyager } from './theory/ModalVoyager.js';
 
 const STRICT_PITCHES = [
   'C1', 'C#1', 'D1', 'Eb1', 'E1', 'F1', 'F#1', 'G1', 'Ab1', 'A1', 'Bb1', 'B1',
@@ -1168,6 +1169,37 @@ export const AppEditorsMixin = {
         }
       });
     }
+
+    // 9-Mode Modal Voyager & Pivot Modulation ("VOYAGE 🧭" in Chord Editor)
+    const chordVoyageMethodSel = document.getElementById('chord-ed-voyage-method');
+    const chordVoyageOrbitSel = document.getElementById('chord-ed-voyage-orbit');
+    const chordVoyageHomeCheck = document.getElementById('chord-ed-voyage-home');
+    const chordVoyageBtn = document.getElementById('btn-chord-voyage');
+
+    if (chordVoyageBtn) {
+      chordVoyageBtn.addEventListener('click', async () => {
+        const pat = this.getPatternById(this.editingPatternId);
+        if (!pat || pat.type !== 'chords') return;
+        const method = (chordVoyageMethodSel && chordVoyageMethodSel.value) || 'hybrid';
+        const orbit = (chordVoyageOrbitSel && chordVoyageOrbitSel.value) || 'medium';
+        const returnHome = chordVoyageHomeCheck ? chordVoyageHomeCheck.checked : true;
+
+        ModalVoyager.applyVoyageToChordPattern(pat, { orbit, method, returnHome });
+        pat.resolution = this.getChordPatternResolutionSummary(pat);
+        this.renderChordMeasuresGrid(pat);
+        this.updateChordDisplay(this.activeBarIndex, 0);
+        this.saveWorkspaceToLocalStorage();
+        this.renderPatternLibrary();
+        this.renderPalette();
+
+        const voyagePreview = pat.measures.map((m) => m.join(' · ')).join(' | ');
+        this.log(`[MODAL VOYAGER 🧭] ${pat.id} (${method.toUpperCase()}, ${orbit.toUpperCase()} Orbit, Home=${returnHome ? 'ON' : 'OFF'}): ${voyagePreview}`);
+
+        if (!this.engine.isPlaying) {
+          await auditionChordEditorChange(pat);
+        }
+      });
+    }
   },
 
   populateChordEditor(pat) {
@@ -1256,6 +1288,10 @@ export const AppEditorsMixin = {
         const isSilent = this.isSilentChordSymbol(symbol);
         const parsedInit = isSilent ? { valid: true } : chordDictionary.parseChordSymbol(symbol);
         const analysis = this.analyzeChordModalFunction(symbol);
+        const voyageNote = pat.modalAnnotations?.[barIdx]?.[s] || '';
+        const badgeHtml = voyageNote
+          ? `${analysis}<div class="voyage-slot-note">🧭 ${voyageNote}</div>`
+          : analysis;
 
         const slotEl = document.createElement('div');
         slotEl.className = `chord-beat-slot${isSilent ? ' is-silent' : ''}${!parsedInit.valid ? ' is-invalid-chord' : ''}`;
@@ -1267,7 +1303,7 @@ export const AppEditorsMixin = {
             <button type="button" class="btn-chord-silence" title="Toggle Silence (O / Empty) on this slot">Ø</button>
             <span class="chord-valid-check" title="${parsedInit.valid ? 'Valid Chord in Dictionary' : 'Chord not found in dictionary'}">${isSilent ? 'Ø' : (parsedInit.valid ? '✓' : '!')}</span>
           </div>
-          <div class="chord-modal-badge">${analysis}</div>
+          <div class="chord-modal-badge">${badgeHtml}</div>
         `;
 
         const inputEl = slotEl.querySelector('.chord-symbol-input');

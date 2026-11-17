@@ -232,6 +232,8 @@ export const AppSettingsModalsMixin = {
     const tensionScaleLbl = document.getElementById('lbl-tension-intensity');
     const tensionPredCheck = document.getElementById('tension-cfg-predictive');
     const tensionChordModeSel = document.getElementById('tension-cfg-chord-mode');
+    const voyageCfgMethodSel = document.getElementById('voyage-cfg-method');
+    const voyageCfgHomeCheck = document.getElementById('voyage-cfg-return-home');
     const btnResetTensionCfg = document.getElementById('btn-reset-tension-config');
 
     const applyTensionConfigUI = (cfgObj, save = true) => {
@@ -250,6 +252,13 @@ export const AppSettingsModalsMixin = {
       if (tensionScaleLbl) tensionScaleLbl.textContent = `${clampedScale}%`;
       if (tensionPredCheck) tensionPredCheck.checked = pred;
       if (tensionChordModeSel) tensionChordModeSel.value = mode;
+
+      if (voyageCfgMethodSel && this.voyageConfig) {
+        voyageCfgMethodSel.value = this.voyageConfig.method || 'hybrid';
+      }
+      if (voyageCfgHomeCheck && this.voyageConfig) {
+        voyageCfgHomeCheck.checked = this.voyageConfig.returnHome !== false;
+      }
 
       this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
       if (save) this.saveWorkspaceToLocalStorage();
@@ -277,10 +286,33 @@ export const AppSettingsModalsMixin = {
         applyTensionConfigUI({ ...this.tensionConfig, chordSubMode: e.target.value }, true);
       });
     }
+    if (voyageCfgMethodSel) {
+      voyageCfgMethodSel.addEventListener('change', (e) => {
+        if (!this.voyageConfig) this.voyageConfig = { orbit: 'off', method: 'hybrid', returnHome: true };
+        this.voyageConfig.method = e.target.value || 'hybrid';
+        this.renderStageTracks();
+        this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+        this.saveWorkspaceToLocalStorage();
+      });
+    }
+    if (voyageCfgHomeCheck) {
+      voyageCfgHomeCheck.addEventListener('change', (e) => {
+        if (!this.voyageConfig) this.voyageConfig = { orbit: 'off', method: 'hybrid', returnHome: true };
+        this.voyageConfig.returnHome = e.target.checked;
+        this.renderStageTracks();
+        this.updateChordDisplay(this.activeBarIndex || 0, Math.max(0, (this.activeBeatInBar || 1) - 1));
+        this.saveWorkspaceToLocalStorage();
+      });
+    }
     if (btnResetTensionCfg) {
       btnResetTensionCfg.addEventListener('click', () => {
+        if (this.voyageConfig) {
+          this.voyageConfig.method = 'hybrid';
+          this.voyageConfig.returnHome = true;
+        }
         applyTensionConfigUI({ ...DEFAULT_TENSION_CONFIG }, true);
-        this.log('[SETTINGS] Reset Predictive Tension Engine to defaults (100% Intensity, Lookahead ON, Tritone Subs ≥ +3)');
+        this.renderStageTracks();
+        this.log('[SETTINGS] Reset Predictive Tension & Modal Voyager to defaults');
       });
     }
   },
@@ -980,7 +1012,7 @@ export const AppSettingsModalsMixin = {
         const nextChordTension = nextCSlot?.tension || 0;
         const barInPat = cBarIdx % cPat.measures.length;
         const rawM = cPat.measures[barInPat] || ['Am7'];
-        const m = TensionEngine.transformBarMeasure(rawM, nowChordTension, cBarIdx, this.tensionConfig);
+        const m = TensionEngine.transformBarMeasure(rawM, nowChordTension, cBarIdx, this.tensionConfig, this.voyageConfig, cPat.measures);
         const chordsInBar = Math.max(1, m.length);
         const chordSlotIdx = Math.min(chordsInBar - 1, cc.stepInBar);
 
@@ -997,7 +1029,7 @@ export const AppSettingsModalsMixin = {
           this.nextChordSymbolLive = m[chordSlotIdx + 1];
         } else if (nextCPat && nextCPat.measures && nextCPat.measures.length > 0) {
           const rawNextM = nextCPat.measures[(cBarIdx + 1) % nextCPat.measures.length] || ['Am7'];
-          const nextM = TensionEngine.transformBarMeasure(rawNextM, nextChordTension, cBarIdx + 1, this.tensionConfig);
+          const nextM = TensionEngine.transformBarMeasure(rawNextM, nextChordTension, cBarIdx + 1, this.tensionConfig, this.voyageConfig, nextCPat.measures);
           this.nextChordSymbolLive = nextM[0] || 'Am7';
         } else {
           this.nextChordSymbolLive = m[0] || 'Am7';

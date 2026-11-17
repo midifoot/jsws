@@ -404,7 +404,14 @@ export class AudioExporter {
         const nowChordTension = cSlot?.tension || 0;
         const nextChordTension = nextCSlot?.tension || 0;
         const rawM = cPat.measures[cBarIdx % cPat.measures.length] || ['Am7'];
-        const m = TensionEngine.transformBarMeasure(rawM, nowChordTension, cBarIdx, tensionCfg);
+        const m = TensionEngine.transformBarMeasure(
+          rawM,
+          nowChordTension,
+          cBarIdx,
+          tensionCfg,
+          this.appUI.voyageConfig,
+          cPat.measures
+        );
         const chordsInBar = Math.max(1, m.length);
         const masterBoundary = masterBarBoundaries[Math.min(cBarIdx, masterBarBoundaries.length - 1)];
         const barDur = syncMode === 'bar-fit' && masterBoundary
