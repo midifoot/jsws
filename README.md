@@ -36,8 +36,7 @@ Javascript WebSequencer (as a PWA) for generating predictive and generative drum
 
 ### Audio & MIDI Routing Hierarchy
 * **Internal SoundFont2 Engine (`FluidR3_GM.sf2`):** Loaded once in **System Settings** and cached permanently in your browser's **IndexedDB** (`AutoBand_Audio_DB`). Runs through a 3-bus submixer (`Drums`, `Bass`, `Chords`) feeding a **Brickwall Dynamics Limiter** (`-3.0 dBFS`, `12:1` ratio) to prevent digital clipping.
-=> the file can be found in the "src/vendor" folder for one time load 
-or [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0/FluidR3_GM.sf2/download)
+=> the file can be found [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0/FluidR3_GM.sf2/download)
 * **Web MIDI Hardware Output:** Any track can be routed independently to an external hardware synth, DAW, or virtual MIDI port (e.g., macOS IAC Driver or Windows loopMIDI) in **System Settings**.
 * **Fallback Web Audio Synth:** If no `.sf2` file is cached and no external MIDI port is selected, AutoBand automatically synthesizes drums, bass, and chords using zero-click Web Audio oscillators so the app always produces sound immediately.
 
@@ -45,7 +44,7 @@ or [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0
 
 ## 2. Install & Quick-Start Checklist (First Launch)
 
-1. **Install prerequisites** : go to [main PWA url](https://midifoot.github.io/jsws/) and either use it online or download it as a PWA
+1. **Install prerequisites** : go to [main PWA url](https://midifoot.github.io/jsws/) and either use it online or download/install it as a PWA
 2. **Load Your SoundFont (One-Time Setup):**
   * You must download `FluidR3_GM.sf2` [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0/FluidR3_GM.sf2/download) or use any other General Midi capable soundfont
 3. **load soundfont into the app cache**
