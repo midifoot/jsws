@@ -1,5 +1,5 @@
 # JSWS AUTOBAND 
-Javascript PWA for generating drums/bass/chords tracks in a devoted way : 
+Javascript WebSequencer (as a PWA) for generating predictive and generative drums/bass/chords : 
 
 # AutoBand — Complete User Guide & Parameter Reference Cheatsheet
 
@@ -36,19 +36,24 @@ Javascript PWA for generating drums/bass/chords tracks in a devoted way :
 
 ### Audio & MIDI Routing Hierarchy
 * **Internal SoundFont2 Engine (`FluidR3_GM.sf2`):** Loaded once in **System Settings** and cached permanently in your browser's **IndexedDB** (`AutoBand_Audio_DB`). Runs through a 3-bus submixer (`Drums`, `Bass`, `Chords`) feeding a **Brickwall Dynamics Limiter** (`-3.0 dBFS`, `12:1` ratio) to prevent digital clipping.
+=> the file can be found in the "src/vendor" folder for one time load 
+or [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0/FluidR3_GM.sf2/download)
 * **Web MIDI Hardware Output:** Any track can be routed independently to an external hardware synth, DAW, or virtual MIDI port (e.g., macOS IAC Driver or Windows loopMIDI) in **System Settings**.
 * **Fallback Web Audio Synth:** If no `.sf2` file is cached and no external MIDI port is selected, AutoBand automatically synthesizes drums, bass, and chords using zero-click Web Audio oscillators so the app always produces sound immediately.
 
 ---
 
-## 2. Quick-Start Checklist (First Launch)
+## 2. Install & Quick-Start Checklist (First Launch)
 
-1. **Load Your SoundFont (One-Time Setup):**
-   * Open **3. SYSTEM SETTINGS** $\rightarrow$ click **`Load Local .sf2`** and select `FluidR3_GM.sf2`.
+1. **Install prerequisites** : go to [main PWA url](https://midifoot.github.io/jsws/) and either use it online or download it as a PWA
+2. **Load Your SoundFont (One-Time Setup):**
+  * You must download `FluidR3_GM.sf2` [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0/FluidR3_GM.sf2/download) or use any other General Midi capable soundfont
+3. **load soudnfont into the app cache**
+   * Open **3. SYSTEM SETTINGS** $\rightarrow$ click **`Load Local .sf2`** and select it (it is now cached so it won't be needed again)
    * Once the top status pill turns green (`SF2: FluidR3_GM Ready`), the binary is stored in IndexedDB and will load automatically on every future session (even offline).
-2. **Audition Your Sounds:**
+4. **Audition Your Sounds:**
    * On **1. MAIN STAGE**, use each track's **Preset Dropdown** and click the **`Test`** button right beside it to audition the GM instrument.
-3. **Start Playback:**
+5. **Start Playback:**
    * Click **`▶ START`** (or press `Spacebar`). If **Pre-Count** is set to `1 Bar` or `2 Bars`, you will hear a rimshot count-in with a negative countdown timer before Bar 1 begins.
 
 ---
