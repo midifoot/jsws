@@ -48,7 +48,7 @@ or [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0
 1. **Install prerequisites** : go to [main PWA url](https://midifoot.github.io/jsws/) and either use it online or download it as a PWA
 2. **Load Your SoundFont (One-Time Setup):**
   * You must download `FluidR3_GM.sf2` [here](https://sourceforge.net/projects/pianobooster/files/pianobooster/1.0.0/FluidR3_GM.sf2/download) or use any other General Midi capable soundfont
-3. **load soudnfont into the app cache**
+3. **load soundfont into the app cache**
    * Open **3. SYSTEM SETTINGS** $\rightarrow$ click **`Load Local .sf2`** and select it (it is now cached so it won't be needed again)
    * Once the top status pill turns green (`SF2: FluidR3_GM Ready`), the binary is stored in IndexedDB and will load automatically on every future session (even offline).
 4. **Audition Your Sounds:**
