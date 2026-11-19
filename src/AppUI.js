@@ -452,9 +452,14 @@ export class AppUI {
     this.log('[WORKSPACE] Cleared to Clean Empty Workspace.');
   }
 
-  loadFactoryDemoDefaults(save = true) {
+  async loadFactoryDemoDefaults(save = true) {
     if (this.engine && this.engine.isPlaying) {
       this.engine.stop();
+    }
+    const loadedCustomDefault = await this.tryLoadDefaultWorkspaceJson();
+    if (loadedCustomDefault) {
+      if (!save) localStorage.removeItem(this.getWorkspaceStorageKey());
+      return;
     }
     this.patterns = createDefaultPatterns();
     this.drumSlots = DEFAULT_DRUM_SLOTS.map(s => ({ ...s }));
