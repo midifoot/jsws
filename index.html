@@ -107,10 +107,9 @@
             <input type="text" id="snapshot-name-input" placeholder="Enter Snapshot Name...">
             <button id="btn-save-snapshot" class="btn btn-green">SAVE SNAPSHOT</button>
             <select id="snapshot-select" title="Recall Saved Stage Snapshot">
-              <option value="Snapshot 1 (Default)">Snapshot 1 (Default)</option>
-              <option value="Verse Groove">Verse Groove</option>
-              <option value="Chorus Lift">Chorus Lift</option>
+              <option value="">(No Snapshots)</option>
             </select>
+            <button id="btn-delete-snapshot" class="btn btn-danger" style="padding: 0.42rem 0.65rem;" title="Delete currently selected Snapshot">🗑</button>
             <button id="btn-export-stage-audio" class="btn btn-gold" title="Bounce full Main Stage performance to .WAV or .MP3">EXPORT AUDIO 💾</button>
           </div>
         </div>
@@ -753,11 +752,21 @@
           <div class="routing-row" style="margin-top: 0.35rem; padding-top: 0.55rem; border-top: 1px solid var(--border-subtle);">
             <div>
               <strong style="color: var(--color-chords);">Portable Project Backup (.json)</strong>
-              <div style="font-size: 0.72rem; color: var(--color-text-dim);">Auto-saved in browser LocalStorage • Export/Import across machines</div>
+              <div style="font-size: 0.72rem; color: var(--color-text-dim);">Auto-saved in browser LocalStorage • Export/Import across machines (or save as <code>src/default-workspace.json</code>)</div>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.45rem;">
+            <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
               <button id="btn-settings-export-json" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;">⬇ Export .json</button>
               <button id="btn-settings-import-json" class="btn btn-green" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;">⬆ Import .json</button>
+            </div>
+          </div>
+          <div class="routing-row" style="margin-top: 0.35rem; padding-top: 0.55rem; border-top: 1px solid var(--border-subtle);">
+            <div>
+              <strong style="color: var(--color-text-main);">Workspace Reset &amp; Demo Templates</strong>
+              <div style="font-size: 0.72rem; color: var(--color-text-dim);">Clear all patterns/snapshots to a blank slate, or load the built-in Demo Patterns for testing</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+              <button id="btn-new-empty-workspace" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;" title="Clear all patterns, loop slots, and snapshots to an empty workspace">🧹 Empty Workspace</button>
+              <button id="btn-reset-factory-defaults" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.74rem;" title="Load the built-in Demo Patterns &amp; Snapshots from defaults.js (for testing)">🎛 Reset Factory Defaults</button>
             </div>
           </div>
         </div>

@@ -1,0 +1,650 @@
+{
+  "version": 1,
+  "savedAt": "2026-11-19T08:40:44.510Z",
+  "tempo": 120,
+  "timeSigSyncMode": "independent",
+  "humanizeConfig": {
+    "timingWindowMs": 10,
+    "velocitySpan": 10
+  },
+  "tensionConfig": {
+    "intensityScale": 100,
+    "predictiveTransitions": true,
+    "chordSubMode": "subs"
+  },
+  "voyageConfig": {
+    "orbit": "off",
+    "method": "hybrid",
+    "returnHome": true,
+    "cycleVariation": true
+  },
+  "drumVelocities": {
+    "accent": 127,
+    "normal": 90,
+    "ghost": 25
+  },
+  "drumSlots": [
+    {
+      "code": "BD",
+      "label": "Bass Drum 1",
+      "pitch": 36
+    },
+    {
+      "code": "SD",
+      "label": "Acoustic Snare",
+      "pitch": 38
+    },
+    {
+      "code": "CH",
+      "label": "Closed Hi-Hat",
+      "pitch": 42
+    },
+    {
+      "code": "OH",
+      "label": "Open Hi-Hat",
+      "pitch": 46
+    },
+    {
+      "code": "LT",
+      "label": "Low Tom",
+      "pitch": 45
+    },
+    {
+      "code": "HT",
+      "label": "High Tom",
+      "pitch": 50
+    },
+    {
+      "code": "CYM",
+      "label": "Ride Cymbal 1",
+      "pitch": 51
+    },
+    {
+      "code": "PERC 1",
+      "label": "Hand Clap",
+      "pitch": 39
+    },
+    {
+      "code": "PERC 2",
+      "label": "Maracas / Shaker",
+      "pitch": 70
+    },
+    {
+      "code": "MISC",
+      "label": "Cowbell",
+      "pitch": 56
+    }
+  ],
+  "tracks": {
+    "drums": {
+      "muted": false,
+      "solo": false,
+      "humanize": 0,
+      "selectedSlot": 0,
+      "slots": [
+        {
+          "patternId": "D-01",
+          "tension": 0
+        }
+      ]
+    },
+    "bass": {
+      "muted": true,
+      "solo": false,
+      "humanize": 0,
+      "selectedSlot": 0,
+      "slots": [
+        {
+          "patternId": "B-01",
+          "tension": 0
+        }
+      ]
+    },
+    "chords": {
+      "muted": false,
+      "solo": false,
+      "humanize": 0,
+      "selectedSlot": 0,
+      "slots": [
+        {
+          "patternId": "C-01",
+          "tension": 0
+        }
+      ]
+    }
+  },
+  "patterns": [
+    {
+      "humanize": 0,
+      "id": "D-01",
+      "type": "drums",
+      "name": "Groove1",
+      "timeSig": "4/4",
+      "syncMaster": true,
+      "bpm": 120,
+      "bars": 1,
+      "resolution": "1/16",
+      "preset": 32,
+      "preview": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1
+      ],
+      "rowMutes": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "rowSolos": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "drumGrid": [
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          3,
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          3,
+          3,
+          0,
+          0,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          1,
+          1,
+          0,
+          0,
+          1,
+          1,
+          0,
+          3,
+          0,
+          1,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          1,
+          3
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "beatSep": 4,
+      "tempoRatio": "1:1"
+    },
+    {
+      "humanize": 0,
+      "id": "B-01",
+      "type": "bass",
+      "name": "Bass1",
+      "timeSig": "4/4",
+      "syncMaster": true,
+      "bpm": 120,
+      "bars": 1,
+      "resolution": "1/16",
+      "octave": 0,
+      "preset": 33,
+      "mode": "strict",
+      "preview": [
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0
+      ],
+      "bassSteps": [
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": true,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        },
+        {
+          "pitch": "E2",
+          "degree": "5",
+          "gate": 25,
+          "accent": false,
+          "slide": true,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        },
+        {
+          "pitch": "A2",
+          "degree": "R8",
+          "gate": 25,
+          "accent": true,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        },
+        {
+          "pitch": "D2",
+          "degree": "3",
+          "gate": 25,
+          "accent": false,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        },
+        {
+          "pitch": "G2",
+          "degree": "5",
+          "gate": 25,
+          "accent": false,
+          "slide": true,
+          "rest": false
+        },
+        {
+          "pitch": "E2",
+          "degree": "3",
+          "gate": 25,
+          "accent": true,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        },
+        {
+          "pitch": "A2",
+          "degree": "R8",
+          "gate": 25,
+          "accent": true,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "G2",
+          "degree": "b7",
+          "gate": 25,
+          "accent": false,
+          "slide": false,
+          "rest": false
+        },
+        {
+          "pitch": "A1",
+          "degree": "R",
+          "gate": 50,
+          "accent": false,
+          "slide": false,
+          "rest": true
+        }
+      ],
+      "beatSep": 4,
+      "tempoRatio": "1:1"
+    },
+    {
+      "humanize": 0,
+      "id": "C-01",
+      "type": "chords",
+      "name": "Chords1",
+      "timeSig": "4/4",
+      "syncMaster": true,
+      "bpm": 120,
+      "bars": 4,
+      "resolution": "Mixed (1–2/bar)",
+      "voicing": "Jazz Drop-2",
+      "octave": 0,
+      "preset": 4,
+      "preview": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "measures": [
+        [
+          "Am9"
+        ],
+        [
+          "Am11"
+        ],
+        [
+          "Dm7"
+        ],
+        [
+          "Gm9",
+          "C#dim7"
+        ]
+      ],
+      "tempoRatio": "1:1"
+    }
+  ],
+  "snapshots": {
+    "Defaults": {
+      "tempo": 120,
+      "drumSlots": [
+        {
+          "code": "BD",
+          "label": "Bass Drum 1",
+          "pitch": 36
+        },
+        {
+          "code": "SD",
+          "label": "Acoustic Snare",
+          "pitch": 38
+        },
+        {
+          "code": "CH",
+          "label": "Closed Hi-Hat",
+          "pitch": 42
+        },
+        {
+          "code": "OH",
+          "label": "Open Hi-Hat",
+          "pitch": 46
+        },
+        {
+          "code": "LT",
+          "label": "Low Tom",
+          "pitch": 45
+        },
+        {
+          "code": "HT",
+          "label": "High Tom",
+          "pitch": 50
+        },
+        {
+          "code": "CYM",
+          "label": "Ride Cymbal 1",
+          "pitch": 51
+        },
+        {
+          "code": "PERC 1",
+          "label": "Hand Clap",
+          "pitch": 39
+        },
+        {
+          "code": "PERC 2",
+          "label": "Maracas / Shaker",
+          "pitch": 70
+        },
+        {
+          "code": "MISC",
+          "label": "Cowbell",
+          "pitch": 56
+        }
+      ],
+      "trackHumanize": {
+        "drums": 0,
+        "bass": 0,
+        "chords": 0
+      },
+      "tracks": {
+        "drums": [
+          {
+            "patternId": "D-01",
+            "tension": 0
+          }
+        ],
+        "bass": [
+          {
+            "patternId": "B-01",
+            "tension": 0
+          }
+        ],
+        "chords": [
+          {
+            "patternId": "C-01",
+            "tension": 0
+          }
+        ]
+      }
+    }
+  }
+}

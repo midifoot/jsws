@@ -90,6 +90,8 @@ export const AppSettingsModalsMixin = {
 
     const btnSettingsExport = document.getElementById('btn-settings-export-json');
     const btnSettingsImport = document.getElementById('btn-settings-import-json');
+    const btnEmptyWorkspace = document.getElementById('btn-new-empty-workspace');
+    const btnResetFactoryDefaults = document.getElementById('btn-reset-factory-defaults');
     const workspaceFileInput = document.getElementById('workspace-file-input');
 
     if (btnSettingsExport) {
@@ -97,6 +99,20 @@ export const AppSettingsModalsMixin = {
     }
     if (btnSettingsImport && workspaceFileInput) {
       btnSettingsImport.addEventListener('click', () => workspaceFileInput.click());
+    }
+    if (btnEmptyWorkspace) {
+      btnEmptyWorkspace.addEventListener('click', () => {
+        if (window.confirm('Clear all patterns, loop chains, and snapshots to an empty workspace?')) {
+          this.loadEmptyWorkspace(true);
+        }
+      });
+    }
+    if (btnResetFactoryDefaults) {
+      btnResetFactoryDefaults.addEventListener('click', () => {
+        if (window.confirm('Load the built-in Factory Demo patterns and snapshots? (Your current unsaved patterns will be replaced.)')) {
+          this.loadFactoryDemoDefaults(true);
+        }
+      });
     }
 
     document.querySelectorAll('.btn-test-drum-vel').forEach(btn => {

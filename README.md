@@ -52,7 +52,11 @@ Javascript WebSequencer (as a PWA) for generating predictive and generative drum
    * Once the top status pill turns green (`SF2: FluidR3_GM Ready`), the binary is stored in IndexedDB and will load automatically on every future session (even offline).
 4. **Audition Your Sounds:**
    * On **1. MAIN STAGE**, use each track's **Preset Dropdown** and click the **`Test`** button right beside it to audition the GM instrument.
-5. **Start Playback:**
+5. **Fresh Boot vs. Demo Patterns:**
+   * On a clean first launch (with no `localStorage` data), AutoBand boots into a **clean empty workspace** (unless a custom `./src/default-workspace.json` file is present in the project).
+   * To load the built-in sample/demo patterns and snapshots for testing, go to **3. SYSTEM SETTINGS** $\rightarrow$ click **`🎛 Reset Factory Defaults`**.
+   * You can also replace the defaults by exporting the current snapshots/patterns setup , renaming it to "default-workspace.json" and replacing the original file (if you have access to the src)
+6. **Start Playback:**
    * Click **`▶ START`** (or press `Spacebar`). If **Pre-Count** is set to `1 Bar` or `2 Bars`, you will hear a rimshot count-in with a negative countdown timer before Bar 1 begins.
 
 ---
@@ -63,7 +67,7 @@ Javascript WebSequencer (as a PWA) for generating predictive and generative drum
 * **Master Tempo (`40–240 BPM`):** Controls the global tempo for all patterns that have **`Sync with Master`** enabled.
 * **Pre-Count (`Off`, `1 Bar`, `2 Bars`):** Plays a metronome count-in before the loop chain starts on Bar 1.
 * **Metronome Toggle (`Metro ON/OFF`):** Keeps the quarter-note rimshot click audible during playback.
-* **Stage Snapshots (`SAVE SNAPSHOT` / Recall Dropdown):** Captures the current Master Tempo, all three tracks' Loop Chain slot assignments, per-slot Tension values (`-5..+5`), Track Humanize overrides, and the 10-slot Drum Kit mapping.
+* **Stage Snapshots (`SAVE SNAPSHOT` / Recall Dropdown / `🗑` Delete):** Captures the current Master Tempo, all three tracks' Loop Chain slot assignments, per-slot Tension values (`-5..+5`), Track Humanize overrides, and the 10-slot Drum Kit mapping. Use the **`🗑`** button beside the dropdown to delete the currently selected snapshot.
 
 ### B. Harmonic Stage Teleprompter ("Now & Next" — 3m Readability)
 * **NOW Panel (Left):** Displays the current Bar number, Beat counter, active **Tension** level (if non-zero), active **Modal Voyager** annotation (`🧭 ...`), and highlights the currently sounding chord inside the bar.
@@ -276,6 +280,7 @@ Click **`EXPORT AUDIO 💾`** on the **Main Stage** (full trio arrangement bounc
 | **Humanize Engine — Global Impact** | `Max Micro-Timing Window`<br>`Max Velocity Jitter Span` | `24 ms` (`±12 ms`)<br>`30 vel` (`±15 vel`) | Scales the maximum timing spread (`4–80 ms`) and velocity variation (`4–80 vel`) produced at `100%` Humanize. |
 | **Predictive Tension Engine** | `Tension Intensity Scale`<br>`Predictive Lookahead`<br>`Chord Substitution Mode` | `100%`<br>`Enabled`<br>`Extensions + Tritone Subs` | Scales how aggressively Tension `-5..+5` alters note density (`25%–200%`), toggles bar-end pickup fills, and locks/unlocks root substitutions. |
 | **Modal Voyager Rules** | `Voyage Method`<br>`Return Home Gravity` | `Hybrid Blend`<br>`ON` | Sets the default mix of Parallel Modal / Pivot Modulation / Constant Structure and Bar 1 / Final Bar home-key resolution. |
+| **UI Preferences & Project Backup** | `⬇ Export .json` / `⬆ Import .json`<br>`🧹 Empty Workspace`<br>`🎛 Reset Factory Defaults` | — | Export/import full workspaces (saving an export as `src/default-workspace.json` sets the custom boot workspace), clear everything to a blank slate, or load the built-in demo patterns/snapshots from `src/defaults.js`. |
 | **Drum Hit Velocity Levels** | `Accent` / `Normal` / `Ghost` | `127` / `90` / `25` | Sets the exact MIDI velocity (`1–127`) sent by States `2`, `1`, and `3` in the Drum Lab Editor. |
 | **10-Slot GM Drum Mapper** | `Slots #1 – #10` | Standard 10-Piece | Reassigns any of the 10 Drum Editor rows to any of the 47 General MIDI Channel 10 percussion pitches. |
 

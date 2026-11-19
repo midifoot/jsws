@@ -71,8 +71,8 @@ export class AppUI {
     // Global Modal Voyager & Modulation Settings (configurable on Main Stage & System Settings)
     this.voyageConfig = { ...DEFAULT_VOYAGE_CONFIG };
 
-    // Pattern Library State (Initialized from src/defaults.js)
-    this.patterns = createDefaultPatterns();
+    // Pattern Library State (Clean empty boot by default; demo defaults available via System Settings)
+    this.patterns = [];
     this.paletteFilter = 'all';
     this.paletteSearch = '';
     this.libraryFilter = 'all';
@@ -89,7 +89,7 @@ export class AppUI {
         muted: false,
         solo: false,
         selectedSlot: 0,
-        slots: DEFAULT_TRACK_SLOTS.drums.map(s => ({ ...s }))
+        slots: []
       },
       bass: {
         id: 'bass',
@@ -100,7 +100,7 @@ export class AppUI {
         muted: false,
         solo: false,
         selectedSlot: 0,
-        slots: DEFAULT_TRACK_SLOTS.bass.map(s => ({ ...s }))
+        slots: []
       },
       chords: {
         id: 'chords',
@@ -111,12 +111,12 @@ export class AppUI {
         muted: false,
         solo: false,
         selectedSlot: 0,
-        slots: DEFAULT_TRACK_SLOTS.chords.map(s => ({ ...s }))
+        slots: []
       }
     };
 
-    // Pre-populated Snapshots (Initialized from src/defaults.js)
-    this.snapshots = createDefaultSnapshots();
+    // Snapshots (Clean empty boot by default)
+    this.snapshots = {};
 
     // Active Editor & Modal State
     this.editingPatternId = null;
@@ -399,10 +399,22 @@ export class AppUI {
 
   syncSnapshotDropdown() {
     const snapSelect = document.getElementById('snapshot-select');
+    const snapInput = document.getElementById('snapshot-name-input');
     if (!snapSelect || !this.snapshots) return;
     const currentVal = snapSelect.value;
+    const keys = Object.keys(this.snapshots);
     snapSelect.innerHTML = '';
-    Object.keys(this.snapshots).forEach(name => {
+
+    if (keys.length === 0) {
+      const emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '(No Snapshots)';
+      snapSelect.appendChild(emptyOpt);
+      if (snapInput && !snapInput.value.trim()) snapInput.value = '';
+      return;
+    }
+
+    keys.forEach(name => {
       const opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
@@ -410,7 +422,78 @@ export class AppUI {
     });
     if (this.snapshots[currentVal]) {
       snapSelect.value = currentVal;
+    } else {
+      snapSelect.value = keys[0];
     }
+    if (snapInput) snapInput.value = snapSelect.value;
+  }
+
+  loadEmptyWorkspace(save = true) {
+    if (this.engine && this.engine.isPlaying) {
+      this.engine.stop();
+    }
+    this.patterns = [];
+    ['drums', 'bass', 'chords'].forEach(tk => {
+      this.tracks[tk].slots = [];
+      this.tracks[tk].selectedSlot = 0;
+      this.tracks[tk].humanize = 0;
+    });
+    this.snapshots = {};
+    this.drumSlots = DEFAULT_DRUM_SLOTS.map(s => ({ ...s }));
+    this.syncSnapshotDropdown();
+    const snapInput = document.getElementById('snapshot-name-input');
+    if (snapInput) snapInput.value = '';
+    this.renderStageTracks();
+    this.renderPalette();
+    this.renderPatternLibrary();
+    this.renderDrumSlotMapper();
+    this.updateChordDisplay(0, 0);
+    if (save) this.saveWorkspaceToLocalStorage();
+    this.log('[WORKSPACE] Cleared to Clean Empty Workspace.');
+  }
+
+  loadFactoryDemoDefaults(save = true) {
+    if (this.engine && this.engine.isPlaying) {
+      this.engine.stop();
+    }
+    this.patterns = createDefaultPatterns();
+    this.drumSlots = DEFAULT_DRUM_SLOTS.map(s => ({ ...s }));
+    ['drums', 'bass', 'chords'].forEach(tk => {
+      this.tracks[tk].slots = DEFAULT_TRACK_SLOTS[tk].map(s => ({ ...s }));
+      this.tracks[tk].selectedSlot = 0;
+      this.tracks[tk].humanize = 0;
+    });
+    this.snapshots = createDefaultSnapshots();
+    this.syncSnapshotDropdown();
+    this.renderStageTracks();
+    this.renderPalette();
+    this.renderPatternLibrary();
+    this.renderDrumSlotMapper();
+    this.updateChordDisplay(0, 0);
+    if (save) this.saveWorkspaceToLocalStorage();
+    this.log('[WORKSPACE] Loaded Factory Demo Patterns & Snapshots (from defaults.js).');
+  }
+
+  async tryLoadDefaultWorkspaceJson() {
+    try {
+      const res = await fetch('./src/default-workspace.json', { cache: 'no-store' });
+      if (!res.ok) return false;
+      const parsed = await res.json();
+      if (this.applyWorkspaceData(parsed)) {
+        this.syncSnapshotDropdown();
+        this.renderStageTracks();
+        this.renderPalette();
+        this.renderPatternLibrary();
+        this.renderDrumSlotMapper();
+        this.updateChordDisplay(0, 0);
+        this.saveWorkspaceToLocalStorage();
+        this.log('[WORKSPACE] Loaded boot defaults from src/default-workspace.json.');
+        return true;
+      }
+    } catch (_) {
+      // Optional file absent — clean empty workspace remains active
+    }
+    return false;
   }
 
   saveWorkspaceToLocalStorage() {
@@ -524,7 +607,11 @@ export class AppUI {
     if (restored) {
       this.log('[UI] AutoBand Workspace Restored from LocalStorage. Click PLAY or press Spacebar.');
     } else {
-      this.log('[UI] AutoBand Front-End Workspace Ready. Click PLAY or press Spacebar.');
+      this.tryLoadDefaultWorkspaceJson().then((loadedJson) => {
+        if (!loadedJson) {
+          this.log('[UI] Clean Empty Workspace Ready. Create patterns in PATTERNS or load Demo Defaults in SYSTEM SETTINGS.');
+        }
+      });
     }
   }
 
@@ -675,9 +762,10 @@ export class AppUI {
       }
     });
 
-    // Snapshot Manager (Save / Overwrite with confirmation modal / Recall on change)
+    // Snapshot Manager (Save / Overwrite with confirmation modal / Recall / Delete)
     const snapshotInput = document.getElementById('snapshot-name-input');
     const btnSaveSnapshot = document.getElementById('btn-save-snapshot');
+    const btnDeleteSnapshot = document.getElementById('btn-delete-snapshot');
     const snapshotSelect = document.getElementById('snapshot-select');
 
     if (snapshotInput && snapshotSelect) {
@@ -685,7 +773,7 @@ export class AppUI {
     }
 
     btnSaveSnapshot.addEventListener('click', () => {
-      const targetName = snapshotInput.value.trim() || snapshotSelect.value || 'Snapshot 1 (Default)';
+      const targetName = snapshotInput.value.trim() || snapshotSelect.value || 'Snapshot 1';
       if (this.snapshots[targetName]) {
         // Existing snapshot name -> open Overwrite Confirmation Modal
         this.pendingSnapshotName = targetName;
@@ -698,6 +786,21 @@ export class AppUI {
         this.commitSaveSnapshot(targetName, false);
       }
     });
+
+    if (btnDeleteSnapshot) {
+      btnDeleteSnapshot.addEventListener('click', () => {
+        const snapName = snapshotSelect ? snapshotSelect.value : '';
+        if (!snapName || !this.snapshots[snapName]) {
+          this.log('[SNAPSHOT] No saved snapshot selected to delete.');
+          return;
+        }
+        delete this.snapshots[snapName];
+        this.syncSnapshotDropdown();
+        if (snapshotInput) snapshotInput.value = snapshotSelect ? snapshotSelect.value : '';
+        this.saveWorkspaceToLocalStorage();
+        this.log(`[SNAPSHOT] Deleted snapshot "${snapName}"`);
+      });
+    }
 
     snapshotSelect.addEventListener('change', (e) => {
       const snapName = e.target.value;
@@ -853,7 +956,19 @@ export class AppUI {
     const nextSymbol = document.getElementById('chord-next-symbol');
 
     const chordSlots = this.tracks.chords.slots;
-    if (!chordSlots || chordSlots.length === 0) return;
+    if (!chordSlots || chordSlots.length === 0) {
+      if (nowMeta) nowMeta.textContent = 'NOW • NO CHORD LOOP ASSIGNED';
+      if (nowSymbol) {
+        nowSymbol.className = 'chord-stage-symbol chord-stage-bar-row count-1';
+        nowSymbol.innerHTML = '<span class="chord-bar-item is-silent-chord">—</span>';
+      }
+      if (nextMeta) nextMeta.textContent = 'NEXT BAR • EMPTY';
+      if (nextSymbol) {
+        nextSymbol.className = 'chord-stage-symbol chord-stage-bar-row count-1';
+        nextSymbol.innerHTML = '<span class="chord-bar-item is-silent-chord">—</span>';
+      }
+      return;
+    }
 
     const currentSlot = chordSlots[barIndex % chordSlots.length];
     const nextSlot = chordSlots[(barIndex + 1) % chordSlots.length];

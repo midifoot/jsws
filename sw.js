@@ -1,4 +1,4 @@
-const CACHE_NAME = 'autoband-core-v22';
+const CACHE_NAME = 'autoband-core-v23';
 
 const CORE_ASSETS = [
   './',
